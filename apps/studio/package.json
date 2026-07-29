@@ -1,0 +1,14 @@
+{
+  "name": "@scenegraph/studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "build": "node --check app.js && node --check server.mjs",
+    "start": "node server.mjs",
+    "typecheck": "node --check app.js && node --check server.mjs",
+    "lint": "node --check app.js && node --check server.mjs",
+    "test": "node --test"
+  }
+}

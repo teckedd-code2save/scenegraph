@@ -6,5 +6,6 @@ dist
 coverage
 renders
 captures
+data
 *.mp4
 *.webm

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SceneGraph</title>
+  <meta name="description" content="Direct real product journeys into launch films.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="mark"><i></i><i></i><i></i><i></i></span><b>SceneGraph</b></div>
+    <div id="projectLabel" class="project" hidden></div>
+    <span class="engine">Frame engine · 60 fps</span>
+  </header>
+  <main>
+    <section id="create" class="create">
+      <p class="eyebrow">New product · fresh workspace</p>
+      <h1>Direct the product.<br>Not the recording.</h1>
+      <p class="lede">One authentic walkthrough becomes a clean, scripted launch film with anchored motion and product-native colour.</p>
+      <form id="brief">
+        <label>Product<input name="productName" required placeholder="Lepta QA"></label>
+        <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>
+        <label class="wide">Customer problem<input name="customerProblem" required minlength="12" placeholder="What painful job does this product remove?"></label>
+        <label>Audience<input name="audience" required placeholder="Product engineering teams"></label>
+        <label>Launch promise<input name="launchPromise" required placeholder="Ship confidence, not guesswork."></label>
+        <label>Signal colour<input name="primary" type="color" value="#1e9fe8"></label>
+        <button>Create product workspace →</button>
+      </form>
+      <p id="createNotice" class="notice">Create a workspace for this product.</p>
+    </section>
+    <section id="workspace" class="workspace" hidden>
+      <div class="workspaceHead">
+        <div><p class="eyebrow">Launch workspace</p><h1 id="promise"></h1></div>
+        <div class="actions"><button id="refresh" class="secondary">Refresh capture</button><button id="generate">Generate first cut →</button></div>
+      </div>
+      <div class="captureStep">
+        <span id="captureStatus" class="status">Awaiting clean capture</span>
+        <div><strong>Recorder project ID</strong><code id="projectId"></code></div>
+        <p>Open the product tab, paste this ID into the SceneGraph extension, then choose <b>Record clean tab</b>. Stop and upload when complete.</p>
+      </div>
+      <div id="stage" class="stage">
+        <div class="stageMark">SG</div><p id="stageMessage">Your clean product film will appear here.</p>
+        <div id="progress" class="progress" hidden><i></i></div><p id="renderError" class="error"></p>
+      </div>
+      <div id="player" class="player" hidden><video controls></video><a class="download" download>Download directed MP4 ↓</a></div>
+      <div id="timeline" class="timeline"></div>
+      <p id="notice" class="notice"></p>
+    </section>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body{width:320px;margin:0;padding:18px;font:14px Inter,system-ui;color:#151715;background:#f7f7f3}
+    h1{font-size:18px;margin:0 0 16px}.field{margin:0 0 12px}label{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;color:#62665f}
+    input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd2cb;border-radius:7px;background:white}
+    button{width:100%;padding:11px;border:0;border-radius:7px;background:#168fe1;color:white;font-weight:650;cursor:pointer}
+    button.stop{background:#242724;margin-top:8px}.status{min-height:20px;margin-top:12px;color:#565b54}
+  </style>
+</head>
+<body>
+  <h1>SceneGraph Capture</h1>
+  <div class="field"><label for="api">Studio API</label><input id="api" value="http://localhost:4100"></div>
+  <div class="field"><label for="project">Project ID</label><input id="project" placeholder="Paste from your workspace"></div>
+  <button id="start">Record clean tab</button>
+  <button id="stop" class="stop">Stop & upload</button>
+  <div id="status" class="status"></div>
+  <script type="module" src="dist/popup.js"></script>
+</body>
+</html>
