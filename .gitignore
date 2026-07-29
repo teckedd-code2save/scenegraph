@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.env
+.DS_Store
+coverage
+renders
+captures
+data
+*.mp4
+*.webm

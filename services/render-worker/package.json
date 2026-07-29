@@ -1,0 +1,29 @@
+{
+  "name": "@scenegraph/render-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.344",
+    "@remotion/renderer": "^4.0.344",
+    "@scenegraph/contracts": "workspace:*",
+    "bullmq": "^5.58.5",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "remotion": "^4.0.344"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "^19.1.12",
+    "tsx": "^4.20.4",
+    "typescript": "^5.9.2"
+  }
+}
