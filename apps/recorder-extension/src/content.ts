@@ -10,7 +10,7 @@ const selectorFor = (element: Element): string => {
     let part = node.tagName.toLowerCase();
     const parent: Element | null = node.parentElement;
     if (parent) {
-      const peers = [...parent.children].filter((child) => child.tagName === node?.tagName);
+      const peers = Array.from(parent.children).filter((child) => child.tagName === node?.tagName);
       if (peers.length > 1) part += `:nth-of-type(${peers.indexOf(node) + 1})`;
     }
     path.unshift(part);
