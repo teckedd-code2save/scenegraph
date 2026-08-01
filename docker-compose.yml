@@ -1,14 +1,120 @@
+name: scenegraph
+
 services:
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  gateway:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "${SCENEGRAPH_PORT:-8080}:8080"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      studio:
+        condition: service_healthy
+      director:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks: [scenegraph]
+
+  studio:
+    build:
+      context: .
+      dockerfile: apps/studio/Dockerfile
+    restart: unless-stopped
     environment:
-      MINIO_ROOT_USER: scenegraph
-      MINIO_ROOT_PASSWORD: scenegraph-local
-    ports: ["9000:9000", "9001:9001"]
-    volumes: [scenegraph-minio:/data]
+      NODE_ENV: production
+      STUDIO_PORT: 3000
+      SCENEGRAPH_API_URL: ""
+    expose: ["3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 128m
+    cpus: 0.25
+    networks: [scenegraph]
+
+  director:
+    build:
+      context: .
+      dockerfile: services/director/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DIRECTOR_PORT: 4100
+      REDIS_URL: redis://redis:6379
+      SCENEGRAPH_DATA_DIR: /data/projects
+      RENDER_OUTPUT_DIR: /data/renders
+      SCENEGRAPH_PUBLIC_URL: ${SCENEGRAPH_PUBLIC_URL:?Set the public HTTPS URL}
+      SCENEGRAPH_ACCESS_TOKEN: ${SCENEGRAPH_ACCESS_TOKEN:?Set a strong access token}
+    expose: ["4100"]
+    volumes:
+      - scenegraph-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    mem_limit: 768m
+    cpus: 1.0
+    networks: [scenegraph]
+
+  render-worker:
+    build:
+      context: .
+      dockerfile: services/render-worker/Dockerfile
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      RENDER_OUTPUT_DIR: /data/renders
+      CHROME_PATH: /usr/bin/chromium
+      REMOTION_BROWSER_EXECUTABLE: /usr/bin/chromium
+    volumes:
+      - scenegraph-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      director:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kill -0 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    mem_limit: 6g
+    cpus: 3.0
+    shm_size: 1gb
+    networks: [scenegraph]
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - scenegraph-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    cpus: 0.5
+    networks: [scenegraph]
+
+networks:
+  scenegraph:
+    driver: bridge
+
 volumes:
-  scenegraph-minio:
+  scenegraph-data:
+  scenegraph-redis:

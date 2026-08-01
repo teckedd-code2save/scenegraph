@@ -18,6 +18,10 @@
       <p class="eyebrow">New product · fresh workspace</p>
       <h1>Direct the product.<br>Not the recording.</h1>
       <p class="lede">One authentic walkthrough becomes a clean, scripted launch film with anchored motion and product-native colour.</p>
+      <div class="access">
+        <label>Deployment access token<input id="accessToken" type="password" autocomplete="current-password" placeholder="Required on the hosted workspace"></label>
+        <span>Stored only in this browser. Leave blank for local development.</span>
+      </div>
       <form id="brief">
         <label>Product<input name="productName" required placeholder="Lepta QA"></label>
         <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>
@@ -48,6 +52,7 @@
       <p id="notice" class="notice"></p>
     </section>
   </main>
+  <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

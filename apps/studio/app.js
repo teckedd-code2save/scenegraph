@@ -4,6 +4,16 @@ let project = null;
 let render = null;
 let poll = null;
 const $ = (selector) => document.querySelector(selector);
+let accessToken = localStorage.getItem("scenegraphAccessToken") ?? "";
+$("#accessToken").value = accessToken;
+
+const request = (pathname, options = {}) => fetch(`${api}${pathname}`, {
+  ...options,
+  headers: {
+    ...(options.headers ?? {}),
+    ...(accessToken ? {authorization: `Bearer ${accessToken}`} : {}),
+  },
+});
 
 const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direction"}))) => {
   $("#timeline").innerHTML = scenes.map((scene, index) =>
@@ -31,10 +41,13 @@ const showProject = () => {
 
 $("#brief").addEventListener("submit", async (event) => {
   event.preventDefault();
+  accessToken = $("#accessToken").value.trim();
+  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
+  else localStorage.removeItem("scenegraphAccessToken");
   const button = event.currentTarget.querySelector("button");
   button.disabled = true; button.textContent = "Creating…";
   const values = Object.fromEntries(new FormData(event.currentTarget));
-  const response = await fetch(`${api}/v1/projects`, {
+  const response = await request("/v1/projects", {
     method: "POST", headers: {"content-type": "application/json"},
     body: JSON.stringify({...values, tone: "precise", brand: {primary: values.primary, surface: "#F5F5F1", ink: "#111411"}}),
   }).catch(() => null);
@@ -46,13 +59,13 @@ $("#brief").addEventListener("submit", async (event) => {
 });
 
 $("#refresh").addEventListener("click", async () => {
-  const response = await fetch(`${api}/v1/projects/${project.id}`);
+  const response = await request(`/v1/projects/${project.id}`);
   if (response.ok) {project = await response.json(); showProject();}
 });
 
 $("#generate").addEventListener("click", async () => {
   $("#generate").disabled = true;
-  const response = await fetch(`${api}/v1/projects/${project.id}/first-cut`, {method: "POST"});
+  const response = await request(`/v1/projects/${project.id}/first-cut`, {method: "POST"});
   if (!response.ok) {
     const problem = await response.json();
     $("#notice").textContent = problem.error ?? "First cut could not be queued.";
@@ -71,7 +84,7 @@ $("#generate").addEventListener("click", async () => {
 });
 
 async function checkRender() {
-  const response = await fetch(`${api}/v1/projects/${project.id}/renders/${render.jobId}`);
+  const response = await request(`/v1/projects/${project.id}/renders/${render.jobId}`);
   if (!response.ok) return;
   render = await response.json();
   $("#stageMessage").textContent = `Render ${render.state}`;

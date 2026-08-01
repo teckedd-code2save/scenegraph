@@ -29,7 +29,8 @@ scenegraph/
 │   └── render-worker/          Queued Remotion rendering to H.264/AAC MP4
 ├── packages/
 │   └── contracts/              Validated capture, scene-plan and render-job schemas
-├── docker-compose.yml          Redis for the BullMQ render queue
+├── docker-compose.yml          GroundControl-ready application stack
+├── deploy/Caddyfile            Single public gateway and internal routing
 └── package.json                pnpm workspace root
 ```
 
@@ -50,7 +51,7 @@ corepack enable
 pnpm install
 pnpm typecheck
 pnpm build
-docker compose up -d     # Redis for the render queue
+docker compose up redis -d
 pnpm dev
 ```
 
@@ -65,7 +66,7 @@ CI (`validate.yml`) runs on every PR and push to `main`:
 3. `pnpm typecheck`
 4. `pnpm build`
 
-No production deployment is wired up yet — durable storage, authentication, and production hosting are in progress.
+The Compose stack is GroundControl-ready for protected single-operator early access. It includes token authentication, signed assets, persistent volumes, health checks and one public gateway. Multi-user identity and external object/database storage remain in progress.
 
 ## 6. Code Conventions
 

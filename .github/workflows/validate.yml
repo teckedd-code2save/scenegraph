@@ -19,3 +19,25 @@ jobs:
       - run: pnpm --filter @scenegraph/contracts build
       - run: pnpm typecheck
       - run: pnpm build
+      - run: pnpm test
+
+  containers:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: studio
+            dockerfile: apps/studio/Dockerfile
+          - name: director
+            dockerfile: services/director/Dockerfile
+          - name: render-worker
+            dockerfile: services/render-worker/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose configuration
+        env:
+          SCENEGRAPH_PUBLIC_URL: https://scenegraph.example.com
+          SCENEGRAPH_ACCESS_TOKEN: ci-validation-token
+        run: docker compose config --quiet
+      - name: Build ${{ matrix.name }} image
+        run: docker build --file "${{ matrix.dockerfile }}" --tag "scenegraph/${{ matrix.name }}:ci" .

@@ -8,14 +8,16 @@ import {renderJobSchema, type RenderJob} from "@scenegraph/contracts";
 let serveUrl: string | null = null;
 const render = async (job: RenderJob) => {
   const outputDir = path.resolve(process.env.RENDER_OUTPUT_DIR ?? "./renders");
+  const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE ?? process.env.CHROME_PATH;
   await mkdir(outputDir, {recursive: true});
   serveUrl ??= await bundle({entryPoint: path.resolve("src/remotion/index.ts")});
   const inputProps = {job};
-  const composition = (await getCompositions(serveUrl, {inputProps})).find((item) => item.id === "LaunchFilm");
+  const composition = (await getCompositions(serveUrl, {inputProps, browserExecutable})).find((item) => item.id === "LaunchFilm");
   if (!composition) throw new Error("LaunchFilm composition missing");
   const outputLocation = path.join(outputDir, `${job.id}.mp4`);
   await renderMedia({
     composition, serveUrl, inputProps, outputLocation,
+    browserExecutable,
     codec: "h264", audioCodec: "aac", pixelFormat: "yuv420p",
   });
   return outputLocation;
