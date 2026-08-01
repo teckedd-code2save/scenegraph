@@ -1,5 +1,9 @@
 import path from "node:path";
-import {mkdir, readFile, writeFile} from "node:fs/promises";
+import {createHmac, timingSafeEqual} from "node:crypto";
+import {createWriteStream} from "node:fs";
+import {mkdir, readFile, rename, writeFile} from "node:fs/promises";
+import {pipeline} from "node:stream/promises";
+import type {Readable} from "node:stream";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -70,7 +74,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   };
 };
 
-const app = Fastify({logger: true});
+const app = Fastify({logger: true, trustProxy: true});
 const dataRoot = path.resolve(process.env.SCENEGRAPH_DATA_DIR ?? "./data");
 const mediaRoot = path.join(dataRoot, "media");
 const renderRoot = path.resolve(process.env.RENDER_OUTPUT_DIR ?? "./renders");
@@ -88,18 +92,73 @@ type StoredProject = {
 const projectPath = (id: string) => path.join(dataRoot, `${id}.json`);
 const loadProject = async (id: string): Promise<StoredProject> =>
   JSON.parse(await readFile(projectPath(id), "utf8")) as StoredProject;
-const saveProject = async (project: StoredProject) =>
-  writeFile(projectPath(project.id), JSON.stringify(project, null, 2));
+const saveProject = async (project: StoredProject) => {
+  const destination = projectPath(project.id);
+  const temporary = `${destination}.${crypto.randomUUID()}.tmp`;
+  await writeFile(temporary, JSON.stringify(project, null, 2));
+  await rename(temporary, destination);
+};
+
+const accessToken = process.env.SCENEGRAPH_ACCESS_TOKEN?.trim();
+if (process.env.NODE_ENV === "production" && !accessToken) {
+  throw new Error("SCENEGRAPH_ACCESS_TOKEN is required in production");
+}
+
+const equalSecret = (left: string, right: string) => {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+};
+
+const signatureFor = (pathname: string) =>
+  createHmac("sha256", accessToken ?? "scenegraph-local-development")
+    .update(pathname)
+    .digest("hex");
+
+const signedAssetUrl = (request: {protocol: string; host: string}, pathname: string) => {
+  const configured = process.env.SCENEGRAPH_PUBLIC_URL?.replace(/\/$/, "");
+  const origin = configured || `${request.protocol}://${request.host}`;
+  return `${origin}${pathname}?signature=${signatureFor(pathname)}`;
+};
+
+app.addHook("onRequest", async (request, reply) => {
+  const pathname = request.url.split("?", 1)[0];
+  if (pathname.startsWith("/v1/")) {
+    if (!accessToken) return;
+    const authorization = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+    const extensionKey = String(request.headers["x-scenegraph-key"] ?? "");
+    if (!equalSecret(authorization || extensionKey, accessToken)) {
+      return reply.code(401).send({error: "A valid SceneGraph access token is required"});
+    }
+  }
+  if (pathname.startsWith("/media/") || pathname.startsWith("/renders/")) {
+    const {signature} = request.query as {signature?: string};
+    if (!signature || !equalSecret(signature, signatureFor(pathname))) {
+      return reply.code(401).send({error: "This asset link is invalid"});
+    }
+  }
+});
 
 const redisUrl = new URL(process.env.REDIS_URL ?? "redis://localhost:6379");
 const queue = new Queue("scenegraph-renders", {
   connection: {host: redisUrl.hostname, port: Number(redisUrl.port || 6379)},
 });
 
-await app.register(cors, {origin: true});
+await app.register(cors, {
+  origin: true,
+  allowedHeaders: ["authorization", "content-type", "x-scenegraph-key"],
+  methods: ["GET", "POST", "PUT", "OPTIONS"],
+});
 await app.register(fastifyStatic, {root: mediaRoot, prefix: "/media/", decorateReply: false});
 await app.register(fastifyStatic, {root: renderRoot, prefix: "/renders/", decorateReply: false});
-app.addContentTypeParser(["video/webm", "video/mp4", "application/octet-stream"], {parseAs: "buffer"}, (_request, body, done) => done(null, body));
+app.addContentTypeParser(["video/webm", "video/mp4", "application/octet-stream"], (_request, payload, done) => done(null, payload));
+app.setErrorHandler((error, request, reply) => {
+  if (error instanceof Error && error.name === "ZodError") {
+    return reply.code(400).send({error: "The request does not match the SceneGraph contract"});
+  }
+  request.log.error(error);
+  return reply.code(500).send({error: "SceneGraph could not complete the request"});
+});
 
 app.get("/health", async () => ({ok: true, service: "scenegraph-director"}));
 
@@ -129,9 +188,14 @@ app.get("/v1/projects/:id", async (request, reply) => {
 app.put("/v1/projects/:id/captures/:captureId/video", async (request, reply) => {
   const {id, captureId} = request.params as {id: string; captureId: string};
   await loadProject(id);
+  if (!/^[0-9a-f-]{36}$/i.test(captureId)) return reply.code(400).send({error: "Capture ID must be a UUID"});
   const extension = request.headers["content-type"]?.includes("mp4") ? "mp4" : "webm";
-  await writeFile(path.join(mediaRoot, `${captureId}.${extension}`), request.body as Buffer);
-  return reply.code(201).send({videoUrl: `${request.protocol}://${request.host}/media/${captureId}.${extension}`});
+  const destination = path.join(mediaRoot, `${captureId}.${extension}`);
+  const temporary = `${destination}.${crypto.randomUUID()}.upload`;
+  await pipeline(request.body as Readable, createWriteStream(temporary, {flags: "wx"}));
+  await rename(temporary, destination);
+  const pathname = `/media/${captureId}.${extension}`;
+  return reply.code(201).send({videoUrl: signedAssetUrl(request, pathname)});
 });
 
 app.post("/v1/projects/:id/captures", async (request, reply) => {
@@ -177,7 +241,9 @@ app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
     state,
     progress: job.progress,
     error: job.failedReason || undefined,
-    downloadUrl: result?.outputLocation ? `${request.protocol}://${request.host}/renders/${path.basename(result.outputLocation)}` : undefined,
+    downloadUrl: result?.outputLocation
+      ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
+      : undefined,
   };
 });
 app.post("/v1/plan", async (request, reply) => {

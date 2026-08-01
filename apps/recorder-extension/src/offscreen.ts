@@ -26,9 +26,12 @@ const stopAndUpload = async (message: Record<string, unknown>) => {
   const apiUrl = String(message.apiUrl);
   const projectId = String(message.projectId);
   const captureId = String(message.captureId);
+  const accessToken = String(message.accessToken ?? "");
+  const authentication: Record<string, string> = {};
+  if (accessToken) authentication["x-scenegraph-key"] = accessToken;
   const uploaded = await fetch(`${apiUrl}/v1/projects/${projectId}/captures/${captureId}/video`, {
     method: "PUT",
-    headers: {"content-type": "video/webm"},
+    headers: {"content-type": "video/webm", ...authentication},
     body: blob,
   });
   if (!uploaded.ok) throw new Error(`Video upload failed (${uploaded.status})`);
@@ -45,7 +48,7 @@ const stopAndUpload = async (message: Record<string, unknown>) => {
   };
   const finalized = await fetch(`${apiUrl}/v1/projects/${projectId}/captures`, {
     method: "POST",
-    headers: {"content-type": "application/json"},
+    headers: {"content-type": "application/json", ...authentication},
     body: JSON.stringify(manifest),
   });
   if (!finalized.ok) throw new Error(`Capture finalization failed (${finalized.status})`);

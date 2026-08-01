@@ -1,4 +1,4 @@
-type RecorderSettings = {apiUrl: string; projectId: string};
+type RecorderSettings = {apiUrl: string; projectId: string; accessToken: string};
 type CaptureSession = {
   tabId: number;
   sourceUrl: string;
@@ -56,6 +56,7 @@ const stopCapture = async (settings: RecorderSettings) => {
     type: "STOP_RECORDING",
     apiUrl: settings.apiUrl.replace(/\/$/, ""),
     projectId: settings.projectId,
+    accessToken: settings.accessToken,
     captureId: crypto.randomUUID(),
     sourceUrl: current.sourceUrl,
     startedAt: current.startedAt,

@@ -18,8 +18,8 @@ A user supplies a product brief and records one authentic journey. SceneGraph re
 
 ## Current maturity
 
-- **Live in this branch:** fresh workspaces, clean tab recording without browser chrome, exact DOM anchors, sensitive-field masking, capture upload, filesystem project persistence, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, server-side H.264 composition, render status, playback and download.
-- **In progress:** durable object/database storage, authentication, production deployment and recorded voice revisions.
+- **Early access:** fresh workspaces, token-protected clean tab capture, exact DOM anchors, sensitive-field masking, signed capture/render assets, persistent Docker volumes, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, server-side H.264 composition, render status, playback and download.
+- **In progress:** multi-user identity, database/object-storage persistence and recorded voice revisions.
 - **Product direction:** GitHub-triggered feature films.
 
 The renderer deliberately creates separate editorial frames and reframes selected product moments. It does not label the source recording as a generated film.
@@ -31,11 +31,15 @@ corepack enable
 pnpm install
 pnpm typecheck
 pnpm build
-docker compose up -d
+docker compose up redis -d
 pnpm dev
 ```
 
 Load the unpacked extension from `apps/recorder-extension`, create a project at `http://localhost:3000`, and paste its project ID into the recorder popup.
+
+## GroundControl deployment
+
+SceneGraph ships as a complete Compose application with one public gateway and private Studio, Director, render-worker and Redis services. See [docs/GROUNDCONTROL.md](docs/GROUNDCONTROL.md) for the deployment, verification and rollback procedure.
 
 ## Definition of done
 

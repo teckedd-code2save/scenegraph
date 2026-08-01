@@ -1,14 +1,16 @@
 const api = document.querySelector<HTMLInputElement>("#api")!;
 const project = document.querySelector<HTMLInputElement>("#project")!;
+const token = document.querySelector<HTMLInputElement>("#token")!;
 const status = document.querySelector<HTMLDivElement>("#status")!;
 
-const settings = () => ({apiUrl: api.value.trim(), projectId: project.value.trim()});
+const settings = () => ({apiUrl: api.value.trim(), projectId: project.value.trim(), accessToken: token.value.trim()});
 const show = (message: string) => { status.textContent = message; };
 
 chrome.storage.local.get(["scenegraphRecorderSettings", "scenegraphRecorderState"]).then((stored) => {
-  const saved = stored.scenegraphRecorderSettings as {apiUrl?: string; projectId?: string} | undefined;
+  const saved = stored.scenegraphRecorderSettings as {apiUrl?: string; projectId?: string; accessToken?: string} | undefined;
   if (saved?.apiUrl) api.value = saved.apiUrl;
   if (saved?.projectId) project.value = saved.projectId;
+  if (saved?.accessToken) token.value = saved.accessToken;
   if (stored.scenegraphRecorderState) show(String(stored.scenegraphRecorderState));
 });
 
