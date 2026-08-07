@@ -9,12 +9,13 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test"
+    "test": "vitest run"
   },
   "dependencies": {
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.10"
   }
 }
