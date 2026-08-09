@@ -5,8 +5,9 @@
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm --parallel --filter @scenegraph/studio --filter @scenegraph/director --filter @scenegraph/render-worker dev",
-    "lint": "pnpm -r lint",
-    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm prepare:shared && pnpm -r lint",
+    "prepare:shared": "pnpm --filter @scenegraph/contracts --filter @scenegraph/media-store build",
+    "typecheck": "pnpm prepare:shared && pnpm -r typecheck",
     "test": "pnpm -r test"
   },
   "engines": {
