@@ -22,10 +22,26 @@ const ensureOffscreen = async () => {
   }
 };
 
+const ensureTabRecorder = async (tabId: number) => {
+  const ping = async () =>
+    chrome.tabs
+      .sendMessage(tabId, {type: "SCENEGRAPH_PING"})
+      .then((response) => Boolean(response?.ok))
+      .catch(() => false);
+
+  if (await ping()) return;
+  await chrome.scripting.executeScript({
+    target: {tabId},
+    files: ["dist/content.js"],
+  });
+  if (!(await ping())) throw new Error("SceneGraph could not prepare this tab for capture. Refresh the product tab and try again.");
+};
+
 const startCapture = async (settings: RecorderSettings) => {
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   if (!tab.id || !tab.url) throw new Error("Select the product tab first");
   await ensureOffscreen();
+  await ensureTabRecorder(tab.id);
   const streamId = await chrome.tabCapture.getMediaStreamId({targetTabId: tab.id});
   current = {
     tabId: tab.id,

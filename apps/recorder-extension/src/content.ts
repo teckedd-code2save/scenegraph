@@ -59,7 +59,11 @@ document.addEventListener("scroll", () => {
   scrollFrame = requestAnimationFrame(() => emit({kind: "scroll", x: scrollX, y: scrollY}));
 }, {capture: true, passive: true});
 
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message.type === "SCENEGRAPH_PING") {
+    sendResponse({ok: true});
+    return;
+  }
   if (message.type === "SCENEGRAPH_START") {
     state.active = true;
     state.startedAt = performance.now();
