@@ -56,6 +56,13 @@ const cameraSchema = z.object({
   easing: z.enum(["standard", "ease-in", "ease-out", "spring"]),
 });
 
+const sceneEvidenceSchema = z.object({
+  kind: z.enum(["interaction", "state", "transition"]),
+  eventIds: z.array(z.string().uuid()).min(1),
+  sourceMs: z.number().nonnegative(),
+  observation: z.string().min(8).max(180),
+});
+
 export const scenePlanSchema = z.object({
   id: z.string().uuid(),
   projectId: z.string().uuid(),
@@ -71,6 +78,8 @@ export const scenePlanSchema = z.object({
     durationMs: z.number().positive(),
     headline: z.string().max(72),
     support: z.string().max(140).optional(),
+    rationale: z.string().min(12).max(240),
+    evidence: sceneEvidenceSchema,
     source: z.object({fromMs: z.number().nonnegative(), toMs: z.number().positive()}).optional(),
     camera: cameraSchema,
     focusEventIds: z.array(z.string().uuid()),

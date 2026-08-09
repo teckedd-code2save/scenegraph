@@ -54,17 +54,65 @@ const compactEvents = (capture: CaptureManifest) => {
 
 const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest): ScenePlan => {
   const events = compactEvents(capture);
+  if (events.length === 0) {
+    throw new Error("SceneGraph cannot direct this capture because it contains no explainable product interactions.");
+  }
   const clicks = events.filter((event) => event.kind === "click");
   const firstInteraction = events[0];
   const secondInteraction = events.find((event) => firstInteraction && event.atMs - firstInteraction.atMs > 3_000) ?? clicks[1] ?? events[1] ?? firstInteraction;
   const earlyClick = clicks.find((event) => firstInteraction && event.atMs - firstInteraction.atMs < 25_000) ?? clicks[0] ?? firstInteraction;
   const journey = journeyName(brief, capture);
   const scenes = [
-    {role: "hook" as const, durationMs: 3200, headline: `${brief.productName} live control`, support: journey, eventId: firstInteraction?.id, zoom: 1.08},
-    {role: "problem" as const, durationMs: 3800, headline: "Spot the runtime state", support: "Start from the real deployment surface.", eventId: firstInteraction?.id, zoom: 1.18},
-    {role: "action" as const, durationMs: 4200, headline: "Open the operational signal", support: "The cut follows the actual interaction path.", eventId: earlyClick?.id ?? firstInteraction?.id, zoom: 1.34},
-    {role: "outcome" as const, durationMs: 4200, headline: "Inspect the evidence", support: "Failure context stays attached to the screen.", eventId: secondInteraction?.id ?? earlyClick?.id, zoom: 1.28},
-    {role: "proof" as const, durationMs: 3600, headline: "Action stays in context", support: "Every pointer and zoom is anchored to the capture.", eventId: earlyClick?.id ?? secondInteraction?.id, zoom: 1.18},
+    {
+      role: "hook" as const,
+      durationMs: 3200,
+      headline: `${brief.productName} live control`,
+      support: journey,
+      eventId: firstInteraction?.id,
+      zoom: 1.08,
+      rationale: "Introduce the live product from the first recorded interaction instead of a synthetic title card.",
+      observation: "The user begins inside the captured product workspace.",
+    },
+    {
+      role: "problem" as const,
+      durationMs: 3800,
+      headline: "Spot the runtime state",
+      support: "Start from the real deployment surface.",
+      eventId: firstInteraction?.id,
+      zoom: 1.18,
+      rationale: "Use the first actionable product state to establish what the viewer should inspect.",
+      observation: "The selected UI element marks the first operational focus in the journey.",
+    },
+    {
+      role: "action" as const,
+      durationMs: 4200,
+      headline: "Open the operational signal",
+      support: "The cut follows the actual interaction path.",
+      eventId: earlyClick?.id ?? firstInteraction?.id,
+      zoom: 1.34,
+      rationale: "Show a recorded click/focus event as the cause of the next product state.",
+      observation: "A user interaction occurs on a visible product control.",
+    },
+    {
+      role: "outcome" as const,
+      durationMs: 4200,
+      headline: "Inspect the evidence",
+      support: "Failure context stays attached to the screen.",
+      eventId: secondInteraction?.id ?? earlyClick?.id,
+      zoom: 1.28,
+      rationale: "Hold on the resulting product context so the viewer sees why the interaction mattered.",
+      observation: "The capture contains a later focused/clicked element in the same workflow.",
+    },
+    {
+      role: "proof" as const,
+      durationMs: 3600,
+      headline: "Action stays in context",
+      support: "Every pointer and zoom is anchored to the capture.",
+      eventId: earlyClick?.id ?? secondInteraction?.id,
+      zoom: 1.18,
+      rationale: "Close the preview on an explainable interaction rather than a generic marketing claim.",
+      observation: "The final preview beat is still tied to a captured UI anchor.",
+    },
   ];
   let startMs = 0;
   const makeScene = (
@@ -72,6 +120,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     scene: typeof scenes[number],
   ): ScenePlan["scenes"][number] => {
     const event = capture.events.find((candidate) => candidate.id === scene.eventId);
+    if (!event?.rect) {
+      throw new Error(`SceneGraph refused to render the ${scene.role} scene because it has no captured UI evidence.`);
+    }
     const centerX = event?.rect ? event.rect.x + event.rect.width / 2 : capture.viewport.width / 2;
     const centerY = event?.rect ? event.rect.y + event.rect.height / 2 : capture.viewport.height / 2;
     const fromMs = event
@@ -86,6 +137,13 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       durationMs: scene.durationMs,
       headline: scene.headline,
       support: scene.support,
+      rationale: scene.rationale,
+      evidence: {
+        kind: event.kind === "click" ? "transition" : "interaction",
+        eventIds: [event.id],
+        sourceMs: event.atMs,
+        observation: scene.observation,
+      },
       source: {fromMs, toMs: Math.min(fromMs + scene.durationMs, capture.durationMs)},
       camera: camera(scene.zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
       focusEventIds: scene.eventId ? [scene.eventId] : [],
@@ -104,6 +162,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     scenes: scenes.map((scene, index) => makeScene(index, scene)),
   };
 };
+
+const planHasSceneEvidence = (plan: ScenePlan | undefined) =>
+  Boolean(plan?.scenes.every((scene) => "rationale" in scene && "evidence" in scene));
 
 const app = Fastify({logger: true, trustProxy: true});
 const dataRoot = path.resolve(process.env.SCENEGRAPH_DATA_DIR ?? "./data");
@@ -329,7 +390,7 @@ app.post("/v1/projects/:id/master", async (request, reply) => {
   const project = await loadProject(id);
   const plan = project.plans.at(-1);
   if (!plan) return reply.code(409).send({error: "Generate and review a first cut before rendering the master"});
-  const queued = await enqueueRender(request, project, "master", plan);
+  const queued = await enqueueRender(request, project, "master", planHasSceneEvidence(plan) ? plan : undefined);
   if (!queued) return reply.code(409).send({error: "Record or upload a product journey first"});
   return reply.code(202).send(queued);
 });

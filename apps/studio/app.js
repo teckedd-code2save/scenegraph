@@ -17,7 +17,7 @@ const request = (pathname, options = {}) => fetch(`${api}${pathname}`, {
 
 const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direction"}))) => {
   $("#timeline").innerHTML = scenes.map((scene, index) =>
-    `<article><small>${String(index + 1).padStart(2, "0")}</small><strong>${escape(scene.role)}</strong><span>${escape(scene.headline)}</span></article>`
+    `<article><small>${String(index + 1).padStart(2, "0")}</small><strong>${escape(scene.role)}</strong><span>${escape(scene.headline)}</span><em>${escape(scene.rationale ?? "No scene rationale yet.")}</em></article>`
   ).join("");
 };
 
