@@ -11,12 +11,15 @@ let serveUrl: string | null = null;
 const megabytes = (value: number) => value * 1024 * 1024;
 const workerRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const localRenderOutputDir = path.join(workerRoot, "..", "director", "renders");
+const shouldReuseBundle = process.env.NODE_ENV === "production";
 
 export const renderFilm = async (job: RenderJob) => {
   const outputDir = path.resolve(process.env.RENDER_OUTPUT_DIR ?? localRenderOutputDir);
   const browserExecutable = process.env.REMOTION_BROWSER_EXECUTABLE ?? process.env.CHROME_PATH;
   await mkdir(outputDir, {recursive: true});
-  serveUrl ??= await bundle({entryPoint: path.join(workerRoot, "src", "remotion", "index.ts")});
+  if (!serveUrl || !shouldReuseBundle) {
+    serveUrl = await bundle({entryPoint: path.join(workerRoot, "src", "remotion", "index.ts")});
+  }
   const inputProps = {job};
   const composition = (await getCompositions(serveUrl, {inputProps, browserExecutable}))
     .find((item) => item.id === "LaunchFilm");

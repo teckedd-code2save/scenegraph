@@ -7,11 +7,17 @@ const start = async (streamId: string) => {
     audio: false,
     video: {
       // Chromium's tabCapture constraint is not represented by lib.dom types.
-      mandatory: {chromeMediaSource: "tab", chromeMediaSourceId: streamId},
+      mandatory: {
+        chromeMediaSource: "tab",
+        chromeMediaSourceId: streamId,
+        minWidth: 1920,
+        minHeight: 1080,
+        minFrameRate: 30,
+      },
     } as MediaTrackConstraints,
   });
   chunks = [];
-  recorder = new MediaRecorder(stream, {mimeType: "video/webm;codecs=vp9", videoBitsPerSecond: 12_000_000});
+  recorder = new MediaRecorder(stream, {mimeType: "video/webm;codecs=vp9", videoBitsPerSecond: 24_000_000});
   recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
   recorder.start(1000);
 };

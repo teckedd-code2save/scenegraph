@@ -26,32 +26,69 @@ const camera = (scale = 1, x = 0, y = 0) => ({
   easing: "standard" as const,
 });
 
+const cleanSegment = (value: string) =>
+  value.replace(/[-_]+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+
+const journeyName = (brief: ProductBrief, capture: CaptureManifest) => {
+  try {
+    const url = new URL(capture.sourceUrl || brief.productUrl);
+    const segment = url.pathname.split("/").filter(Boolean).at(-1);
+    return segment ? cleanSegment(segment) : brief.productName;
+  } catch {
+    return brief.productName;
+  }
+};
+
+const compactEvents = (capture: CaptureManifest) => {
+  const useful = capture.events
+    .filter((event) => ["click", "focus", "input"].includes(event.kind) && event.rect)
+    .sort((left, right) => left.atMs - right.atMs);
+  const selected: typeof useful = [];
+  for (const event of useful) {
+    const previous = selected.at(-1);
+    if (previous && previous.selector === event.selector && event.atMs - previous.atMs < 1400) continue;
+    selected.push(event);
+  }
+  return selected;
+};
+
 const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest): ScenePlan => {
-  const clicks = capture.events.filter((event) => event.kind === "click");
-  const focus = capture.events.find((event) => event.kind === "focus" || event.kind === "input");
-  const total = Math.max(Math.min(capture.durationMs, 42_000), 24_000);
-  const beat = Math.floor(total / 7);
+  const events = compactEvents(capture);
+  const clicks = events.filter((event) => event.kind === "click");
+  const firstInteraction = events[0];
+  const secondInteraction = events.find((event) => firstInteraction && event.atMs - firstInteraction.atMs > 3_000) ?? clicks[1] ?? events[1] ?? firstInteraction;
+  const earlyClick = clicks.find((event) => firstInteraction && event.atMs - firstInteraction.atMs < 25_000) ?? clicks[0] ?? firstInteraction;
+  const journey = journeyName(brief, capture);
+  const scenes = [
+    {role: "hook" as const, durationMs: 3200, headline: `${brief.productName} live control`, support: journey, eventId: firstInteraction?.id, zoom: 1.08},
+    {role: "problem" as const, durationMs: 3800, headline: "Spot the runtime state", support: "Start from the real deployment surface.", eventId: firstInteraction?.id, zoom: 1.18},
+    {role: "action" as const, durationMs: 4200, headline: "Open the operational signal", support: "The cut follows the actual interaction path.", eventId: earlyClick?.id ?? firstInteraction?.id, zoom: 1.34},
+    {role: "outcome" as const, durationMs: 4200, headline: "Inspect the evidence", support: "Failure context stays attached to the screen.", eventId: secondInteraction?.id ?? earlyClick?.id, zoom: 1.28},
+    {role: "proof" as const, durationMs: 3600, headline: "Action stays in context", support: "Every pointer and zoom is anchored to the capture.", eventId: earlyClick?.id ?? secondInteraction?.id, zoom: 1.18},
+  ];
+  let startMs = 0;
   const makeScene = (
     index: number,
-    role: ScenePlan["scenes"][number]["role"],
-    headline: string,
-    support?: string,
-    eventId?: string,
-    zoom = 1,
+    scene: typeof scenes[number],
   ): ScenePlan["scenes"][number] => {
-    const event = capture.events.find((candidate) => candidate.id === eventId);
+    const event = capture.events.find((candidate) => candidate.id === scene.eventId);
     const centerX = event?.rect ? event.rect.x + event.rect.width / 2 : capture.viewport.width / 2;
     const centerY = event?.rect ? event.rect.y + event.rect.height / 2 : capture.viewport.height / 2;
+    const fromMs = event
+      ? Math.max(0, Math.min(event.atMs - 1800, capture.durationMs - scene.durationMs - 1))
+      : Math.max(0, Math.min(index * 3000, capture.durationMs - scene.durationMs - 1));
+    const plannedStartMs = startMs;
+    startMs += scene.durationMs;
     return {
       id: crypto.randomUUID(),
-      role,
-      startMs: index * beat,
-      durationMs: beat,
-      headline,
-      support,
-      source: {fromMs: Math.min(index * beat, capture.durationMs - 1), toMs: Math.min((index + 1) * beat, capture.durationMs)},
-      camera: camera(zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
-      focusEventIds: eventId ? [eventId] : [],
+      role: scene.role,
+      startMs: plannedStartMs,
+      durationMs: scene.durationMs,
+      headline: scene.headline,
+      support: scene.support,
+      source: {fromMs, toMs: Math.min(fromMs + scene.durationMs, capture.durationMs)},
+      camera: camera(scene.zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
+      focusEventIds: scene.eventId ? [scene.eventId] : [],
       transition: index === 0 ? "cut" : index % 3 === 0 ? "match" : "mask",
     };
   };
@@ -64,15 +101,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     width: 1920,
     height: 1080,
     brand: brief.brand,
-    scenes: [
-      makeScene(0, "hook", brief.launchPromise),
-      makeScene(1, "problem", brief.customerProblem, `For ${brief.audience}`),
-      makeScene(2, "action", "Watch the real workflow.", undefined, focus?.id, 1.7),
-      makeScene(3, "outcome", "From intent to outcome—without the busywork.", undefined, clicks[0]?.id, 1.45),
-      makeScene(4, "proof", "The result is visible, not implied.", undefined, clicks.at(-1)?.id, 1.55),
-      makeScene(5, "fit", `Built for ${brief.audience}.`, undefined, undefined, 1.08),
-      makeScene(6, "close", brief.launchPromise, brief.productName),
-    ],
+    scenes: scenes.map((scene, index) => makeScene(index, scene)),
   };
 };
 
