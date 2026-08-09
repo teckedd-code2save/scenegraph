@@ -29,7 +29,7 @@ const camera = (scale = 1, x = 0, y = 0) => ({
 const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest): ScenePlan => {
   const clicks = capture.events.filter((event) => event.kind === "click");
   const focus = capture.events.find((event) => event.kind === "focus" || event.kind === "input");
-  const total = Math.max(capture.durationMs, 24_000);
+  const total = Math.max(Math.min(capture.durationMs, 42_000), 24_000);
   const beat = Math.floor(total / 7);
   const makeScene = (
     index: number,
