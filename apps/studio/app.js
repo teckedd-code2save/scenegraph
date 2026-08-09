@@ -25,6 +25,80 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character]);
 
+const resetPlayer = () => {
+  const video = $("#renderVideo");
+  $("#player").hidden = true;
+  $("#downloadRender").hidden = true;
+  $("#downloadRender").removeAttribute("href");
+  $("#quality").textContent = "";
+  video.pause();
+  video.removeAttribute("src");
+  video.load();
+};
+
+const waitForVideo = (video) => new Promise((resolve, reject) => {
+  const cleanup = () => {
+    video.removeEventListener("canplay", handleReady);
+    video.removeEventListener("error", handleError);
+  };
+  const handleReady = () => {
+    cleanup();
+    resolve();
+  };
+  const handleError = () => {
+    cleanup();
+    reject(new Error("The video file could not be loaded."));
+  };
+  video.addEventListener("canplay", handleReady, {once: true});
+  video.addEventListener("error", handleError, {once: true});
+});
+
+async function showPlayableRender() {
+  const response = await fetch(render.downloadUrl, {method: "HEAD", cache: "no-store"}).catch(() => null);
+  if (!response?.ok) {
+    $("#progress").hidden = true;
+    $("#stage").hidden = false;
+    $("#player").hidden = true;
+    $("#stageMessage").textContent = "Render completed";
+    $("#renderError").textContent = "The video file is not available yet. Try Refresh capture or render again.";
+    $("#master").disabled = false;
+    $("#generate").disabled = false;
+    return;
+  }
+
+  const video = $("#renderVideo");
+  const download = $("#downloadRender");
+  $("#stageMessage").textContent = "Preparing playback";
+  $("#renderError").textContent = "";
+  download.hidden = true;
+  download.href = render.downloadUrl;
+  $("#quality").textContent = render.profile === "master" ? "Master · 1080p · 60 fps" : "Preview · 720p · 30 fps";
+
+  try {
+    const ready = waitForVideo(video);
+    video.src = render.downloadUrl;
+    await ready;
+  } catch (error) {
+    $("#progress").hidden = true;
+    $("#stage").hidden = false;
+    $("#player").hidden = true;
+    $("#stageMessage").textContent = "Render completed";
+    $("#renderError").textContent = error.message;
+    $("#master").disabled = false;
+    $("#generate").disabled = false;
+    return;
+  }
+
+  $("#progress").hidden = true;
+  $("#stage").hidden = true;
+  $("#player").hidden = false;
+  download.hidden = false;
+  $("#master").hidden = render.profile === "master";
+  $("#master").disabled = false;
+  $("#generate").disabled = false;
+  $("#notice").textContent = `${render.profile === "master" ? "Master" : "Preview"} ready.`;
+}
+
 const showProject = () => {
   localStorage.setItem("scenegraphActiveProjectId", project.id);
   $("#create").hidden = true;
@@ -91,7 +165,7 @@ $("#refresh").addEventListener("click", async () => {
 async function requestRender(pathname, waitingMessage) {
   $("#generate").disabled = true;
   $("#master").disabled = true;
-  $("#player").hidden = true;
+  resetPlayer();
   $("#stage").hidden = false;
   const response = await request(`/v1/projects/${project.id}/${pathname}`, {method: "POST"});
   if (!response.ok) {
@@ -123,13 +197,7 @@ async function checkRender() {
   $("#renderError").textContent = render.error ?? "";
   if (render.downloadUrl) {
     clearInterval(poll);
-    $("#stage").hidden = true; $("#player").hidden = false;
-    $("#player video").src = render.downloadUrl;
-    $("#player a").href = render.downloadUrl;
-    $("#quality").textContent = render.profile === "master" ? "Master · 1080p · 60 fps" : "Preview · 720p · 30 fps";
-    $("#master").hidden = render.profile === "master";
-    $("#master").disabled = false;
-    $("#generate").disabled = false;
+    await showPlayableRender();
   }
   if (render.state === "failed") {
     clearInterval(poll); $("#progress").hidden = true;
