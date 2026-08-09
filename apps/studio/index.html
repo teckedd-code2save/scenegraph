@@ -22,6 +22,10 @@
         <label>Deployment access token<input id="accessToken" type="password" autocomplete="current-password" placeholder="Required on the hosted workspace"></label>
         <span>Stored only in this browser. Leave blank for local development.</span>
       </div>
+      <form id="restore" class="restore">
+        <label>Open existing workspace<input id="restoreId" placeholder="Paste recorder project ID"></label>
+        <button>Open workspace</button>
+      </form>
       <form id="brief">
         <label>Product<input name="productName" required placeholder="Lepta QA"></label>
         <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>

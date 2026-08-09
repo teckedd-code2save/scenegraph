@@ -26,6 +26,7 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (character) => ({
 })[character]);
 
 const showProject = () => {
+  localStorage.setItem("scenegraphActiveProjectId", project.id);
   $("#create").hidden = true;
   $("#workspace").hidden = false;
   $("#projectLabel").hidden = false;
@@ -38,6 +39,30 @@ const showProject = () => {
   $("#generate").disabled = !ready;
   timeline(project.plans.at(-1)?.scenes);
 };
+
+const loadProject = async (id, quiet = false) => {
+  if (!id) return false;
+  accessToken = $("#accessToken").value.trim();
+  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
+  else localStorage.removeItem("scenegraphAccessToken");
+  const response = await request(`/v1/projects/${id}`).catch(() => null);
+  if (!response?.ok) {
+    if (!quiet) $("#createNotice").textContent = "That workspace could not be opened. Check the project ID and API.";
+    return false;
+  }
+  project = await response.json();
+  showProject();
+  $("#notice").textContent = "Workspace restored.";
+  return true;
+};
+
+$("#restore").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button");
+  button.disabled = true; button.textContent = "Opening...";
+  await loadProject($("#restoreId").value.trim());
+  button.disabled = false; button.textContent = "Open workspace";
+});
 
 $("#brief").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -113,3 +138,4 @@ async function checkRender() {
 }
 
 timeline();
+void loadProject(localStorage.getItem("scenegraphActiveProjectId"), true);
