@@ -13,6 +13,8 @@
 | Capture | Chrome extension (MV3) |
 | Direction service | Fastify + BullMQ (Redis) |
 | Rendering | Remotion + FFmpeg (H.264/AAC MP4) |
+| Production media | Cloudflare R2 (S3-compatible) |
+| Production compute | Modal on-demand render endpoint |
 | Contracts | Zod-validated schemas |
 
 ## 2. Workspace Structure
@@ -26,9 +28,10 @@ scenegraph/
 │                               focus, scroll and navigation metadata
 ├── services/
 │   ├── director/               Product-specific narrative, scene and camera planning
-│   └── render-worker/          Queued Remotion rendering to H.264/AAC MP4
+│   └── render-worker/          Remotion rendering for Modal and local fallback
 ├── packages/
-│   └── contracts/              Validated capture, scene-plan and render-job schemas
+│   ├── contracts/              Validated capture, scene-plan and render-job schemas
+│   └── media-store/            Private R2 objects and signed asset URLs
 ├── docker-compose.yml          GroundControl-ready application stack
 ├── deploy/Caddyfile            Single public gateway and internal routing
 └── package.json                pnpm workspace root
@@ -66,7 +69,7 @@ CI (`validate.yml`) runs on every PR and push to `main`:
 3. `pnpm typecheck`
 4. `pnpm build`
 
-The Compose stack is GroundControl-ready for protected single-operator early access. It includes token authentication, signed assets, persistent volumes, health checks and one public gateway. Multi-user identity and external object/database storage remain in progress.
+The default Compose stack is the lean GroundControl control plane: gateway, Studio, Director and Redis. Production captures and films live in R2, and Director dispatches render jobs to Modal. The heavyweight local render worker is opt-in through the `local-renderer` profile. Multi-user identity and database persistence remain in progress.
 
 ## 6. Code Conventions
 

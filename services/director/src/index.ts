@@ -7,16 +7,18 @@ import type {Readable} from "node:stream";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
-import {Queue} from "bullmq";
+import {Queue, Worker} from "bullmq";
 import {
   captureManifestSchema,
   productBriefSchema,
   scenePlanSchema,
   renderJobSchema,
+  renderResultSchema,
   type CaptureManifest,
   type ProductBrief,
   type ScenePlan,
 } from "@scenegraph/contracts";
+import {createObjectStoreFromEnv} from "@scenegraph/media-store";
 
 const camera = (scale = 1, x = 0, y = 0) => ({
   from: {x: 0, y: 0, scale: 1},
@@ -79,6 +81,7 @@ const dataRoot = path.resolve(process.env.SCENEGRAPH_DATA_DIR ?? "./data");
 const mediaRoot = path.join(dataRoot, "media");
 const renderRoot = path.resolve(process.env.RENDER_OUTPUT_DIR ?? "./renders");
 await Promise.all([mkdir(dataRoot, {recursive: true}), mkdir(mediaRoot, {recursive: true}), mkdir(renderRoot, {recursive: true})]);
+const objectStore = createObjectStoreFromEnv();
 
 type StoredProject = {
   id: string;
@@ -121,6 +124,13 @@ const signedAssetUrl = (request: {protocol: string; host: string}, pathname: str
   return `${origin}${pathname}?signature=${signatureFor(pathname)}`;
 };
 
+const captureUrl = async (
+  request: {protocol: string; host: string},
+  capture: CaptureManifest,
+) => capture.assetKey && objectStore
+  ? objectStore.signedGetUrl(capture.assetKey, 12 * 60 * 60)
+  : capture.videoUrl;
+
 app.addHook("onRequest", async (request, reply) => {
   const pathname = request.url.split("?", 1)[0];
   if (pathname.startsWith("/v1/")) {
@@ -144,6 +154,32 @@ const queue = new Queue("scenegraph-renders", {
   connection: {host: redisUrl.hostname, port: Number(redisUrl.port || 6379)},
 });
 
+const remoteRenderUrl = process.env.MODAL_RENDER_URL?.trim();
+if (remoteRenderUrl) {
+  const remoteRenderToken = process.env.MODAL_RENDER_TOKEN?.trim();
+  if (!remoteRenderToken) throw new Error("MODAL_RENDER_TOKEN is required when MODAL_RENDER_URL is set");
+  new Worker("scenegraph-renders", async (queued) => {
+    const job = renderJobSchema.parse(queued.data);
+    const response = await fetch(remoteRenderUrl, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${remoteRenderToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(job),
+      signal: AbortSignal.timeout(30 * 60 * 1000),
+    });
+    if (!response.ok) {
+      const details = (await response.text()).slice(0, 500);
+      throw new Error(`Remote renderer returned ${response.status}: ${details}`);
+    }
+    return renderResultSchema.parse(await response.json());
+  }, {
+    connection: {host: redisUrl.hostname, port: Number(redisUrl.port || 6379)},
+    concurrency: 1,
+  });
+}
+
 await app.register(cors, {
   origin: true,
   allowedHeaders: ["authorization", "content-type", "x-scenegraph-key"],
@@ -160,7 +196,12 @@ app.setErrorHandler((error, request, reply) => {
   return reply.code(500).send({error: "SceneGraph could not complete the request"});
 });
 
-app.get("/health", async () => ({ok: true, service: "scenegraph-director"}));
+app.get("/health", async () => ({
+  ok: true,
+  service: "scenegraph-director",
+  media: objectStore ? "r2" : "local",
+  renderer: remoteRenderUrl ? "modal" : "local-worker",
+}));
 
 app.post("/v1/projects", async (request, reply) => {
   const brief = productBriefSchema.parse(request.body);
@@ -190,11 +231,20 @@ app.put("/v1/projects/:id/captures/:captureId/video", async (request, reply) => 
   await loadProject(id);
   if (!/^[0-9a-f-]{36}$/i.test(captureId)) return reply.code(400).send({error: "Capture ID must be a UUID"});
   const extension = request.headers["content-type"]?.includes("mp4") ? "mp4" : "webm";
-  const destination = path.join(mediaRoot, `${captureId}.${extension}`);
+  const assetKey = `captures/${id}/${captureId}.${extension}`;
+  if (objectStore) {
+    await objectStore.put(assetKey, request.body as Readable, `video/${extension}`);
+    return reply.code(201).send({
+      assetKey,
+      videoUrl: await objectStore.signedGetUrl(assetKey, 12 * 60 * 60),
+    });
+  }
+  const destination = path.join(mediaRoot, id, `${captureId}.${extension}`);
+  await mkdir(path.dirname(destination), {recursive: true});
   const temporary = `${destination}.${crypto.randomUUID()}.upload`;
   await pipeline(request.body as Readable, createWriteStream(temporary, {flags: "wx"}));
   await rename(temporary, destination);
-  const pathname = `/media/${captureId}.${extension}`;
+  const pathname = `/media/${id}/${captureId}.${extension}`;
   return reply.code(201).send({videoUrl: signedAssetUrl(request, pathname)});
 });
 
@@ -208,24 +258,51 @@ app.post("/v1/projects/:id/captures", async (request, reply) => {
   return reply.code(201).send(capture);
 });
 
+const enqueueRender = async (
+  request: {protocol: string; host: string},
+  project: StoredProject,
+  profile: "preview" | "master",
+  existingPlan?: ScenePlan,
+) => {
+  const capture = project.captures.at(-1);
+  if (!capture) return null;
+  const plan = existingPlan ?? scenePlanSchema.parse(direct(project.id, project.brief, capture));
+  const renderJob = renderJobSchema.parse({
+    id: crypto.randomUUID(),
+    projectId: project.id,
+    capture: {...capture, videoUrl: await captureUrl(request, capture)},
+    plan,
+    output: profile === "preview"
+      ? {profile, width: 1280, height: 720, fps: 30, codec: "h264", audioCodec: "aac", pixelFormat: "yuv420p"}
+      : {profile, width: 1920, height: 1080, fps: 60, codec: "h264", audioCodec: "aac", pixelFormat: "yuv420p"},
+  });
+  await queue.add(`render-${profile}`, renderJob, {
+    jobId: renderJob.id,
+    removeOnComplete: {count: 100},
+    removeOnFail: {count: 100},
+  });
+  if (!existingPlan) project.plans.push(plan);
+  project.renderJobIds.push(renderJob.id);
+  await saveProject(project);
+  return {jobId: renderJob.id, plan, profile};
+};
+
 app.post("/v1/projects/:id/first-cut", async (request, reply) => {
   const {id} = request.params as {id: string};
   const project = await loadProject(id);
-  const capture = project.captures.at(-1);
-  if (!capture) return reply.code(409).send({error: "Record or upload a product journey first"});
-  const plan = scenePlanSchema.parse(direct(id, project.brief, capture));
-  const renderJob = renderJobSchema.parse({
-    id: crypto.randomUUID(),
-    projectId: id,
-    capture,
-    plan,
-    output: {codec: "h264", audioCodec: "aac", pixelFormat: "yuv420p"},
-  });
-  await queue.add("render-first-cut", renderJob, {jobId: renderJob.id, removeOnComplete: false, removeOnFail: false});
-  project.plans.push(plan);
-  project.renderJobIds.push(renderJob.id);
-  await saveProject(project);
-  return reply.code(202).send({jobId: renderJob.id, plan});
+  const queued = await enqueueRender(request, project, "preview");
+  if (!queued) return reply.code(409).send({error: "Record or upload a product journey first"});
+  return reply.code(202).send(queued);
+});
+
+app.post("/v1/projects/:id/master", async (request, reply) => {
+  const {id} = request.params as {id: string};
+  const project = await loadProject(id);
+  const plan = project.plans.at(-1);
+  if (!plan) return reply.code(409).send({error: "Generate and review a first cut before rendering the master"});
+  const queued = await enqueueRender(request, project, "master", plan);
+  if (!queued) return reply.code(409).send({error: "Record or upload a product journey first"});
+  return reply.code(202).send(queued);
 });
 
 app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
@@ -235,15 +312,19 @@ app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
   const job = await queue.getJob(jobId);
   if (!job) return reply.code(404).send({error: "Render job expired"});
   const state = await job.getState();
-  const result = job.returnvalue as {outputLocation?: string} | undefined;
+  const result = job.returnvalue ? renderResultSchema.parse(job.returnvalue) : undefined;
+  const downloadUrl = result?.outputKey && objectStore
+    ? await objectStore.signedGetUrl(result.outputKey)
+    : result?.outputLocation
+      ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
+      : undefined;
   return {
     jobId,
     state,
     progress: job.progress,
     error: job.failedReason || undefined,
-    downloadUrl: result?.outputLocation
-      ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
-      : undefined,
+    profile: result?.profile,
+    downloadUrl,
   };
 });
 app.post("/v1/plan", async (request, reply) => {

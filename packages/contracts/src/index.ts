@@ -46,6 +46,7 @@ export const captureManifestSchema = z.object({
     deviceScaleFactor: z.number().positive(),
   }),
   videoUrl: z.string().url(),
+  assetKey: z.string().min(1).optional(),
   events: z.array(captureEventSchema),
 });
 
@@ -83,10 +84,22 @@ export const renderJobSchema = z.object({
   capture: captureManifestSchema,
   plan: scenePlanSchema,
   output: z.object({
+    profile: z.enum(["preview", "master"]),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    fps: z.union([z.literal(30), z.literal(60)]),
     codec: z.literal("h264"),
     pixelFormat: z.literal("yuv420p"),
     audioCodec: z.literal("aac"),
   }),
+});
+
+export const renderResultSchema = z.object({
+  profile: z.enum(["preview", "master"]),
+  outputKey: z.string().min(1).optional(),
+  outputLocation: z.string().min(1).optional(),
+}).refine((result) => Boolean(result.outputKey || result.outputLocation), {
+  message: "A render result requires an object key or local output location",
 });
 
 export type ProductBrief = z.infer<typeof productBriefSchema>;
@@ -94,3 +107,4 @@ export type CaptureEvent = z.infer<typeof captureEventSchema>;
 export type CaptureManifest = z.infer<typeof captureManifestSchema>;
 export type ScenePlan = z.infer<typeof scenePlanSchema>;
 export type RenderJob = z.infer<typeof renderJobSchema>;
+export type RenderResult = z.infer<typeof renderResultSchema>;

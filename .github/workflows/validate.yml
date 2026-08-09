@@ -17,6 +17,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @scenegraph/contracts build
+      - run: pnpm --filter @scenegraph/media-store build
       - run: pnpm typecheck
       - run: pnpm build
       - run: pnpm test
@@ -38,6 +39,12 @@ jobs:
         env:
           SCENEGRAPH_PUBLIC_URL: https://scenegraph.example.com
           SCENEGRAPH_ACCESS_TOKEN: ci-validation-token
+          MODAL_RENDER_URL: https://example--scenegraph-renderer.modal.run
+          MODAL_RENDER_TOKEN: ci-render-token
+          R2_ACCOUNT_ID: ci-account
+          R2_ACCESS_KEY_ID: ci-access-key
+          R2_SECRET_ACCESS_KEY: ci-secret-key
+          R2_BUCKET: scenegraph-ci
         run: docker compose config --quiet
       - name: Build ${{ matrix.name }} image
         run: docker build --file "${{ matrix.dockerfile }}" --tag "scenegraph/${{ matrix.name }}:ci" .

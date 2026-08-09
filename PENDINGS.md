@@ -6,13 +6,15 @@
 
 1. **The browser-only canvas renderer is legacy.** The README states it explicitly: the earlier canvas renderer "is not treated as the final architecture." Server-side Remotion/FFmpeg rendering through `render-worker` is the target — do not resurrect or optimize the canvas path.
 
-2. **Persistence is single-host early access.** Projects, captures and renders survive container restarts through the `scenegraph-data` Docker volume. They do not yet survive loss of the VPS or volume; database and object-storage replication remain in progress.
+2. **Project metadata is single-host early access.** Captures and renders are durable R2 objects in production. Project JSON still lives in the `scenegraph-data` Docker volume until database persistence lands, so that volume still requires backups.
 
 3. **Authentication is single-operator.** Studio and the recorder use one deployment access token. This is appropriate for protected early access, not a multi-tenant public launch.
 
 4. **`apps/studio` intentionally has no runtime dependencies.** It is a small Node static server with runtime `config.js` injection. Do not replace that with build-time API configuration, because the same image must work behind GroundControl domains.
 
-5. **Redis is a hard runtime dependency.** The render queue (BullMQ) needs Redis via `docker compose up redis -d` during local development. The production Compose stack starts it automatically.
+5. **Redis is a hard runtime dependency.** The render queue (BullMQ) needs Redis via `docker compose up redis -d` during local development. Production retains only the newest 100 completed and failed jobs so queue metadata cannot grow without bound.
+
+5a. **Production rendering is remote.** The default Compose stack dispatches to the authenticated Modal endpoint. `render-worker` is behind the `local-renderer` Compose profile and must not run on the constrained GroundControl VPS.
 
 6. **Node 22 and pnpm 10.14 are pinned in CI.** Use `corepack enable` locally so the pinned package manager matches `validate.yml` (`pnpm/action-setup` version 10.14.0).
 
@@ -40,4 +42,4 @@
 
 15. **`--frozen-lockfile` in CI.** Adding a dependency without committing the lockfile update breaks CI. Always run `pnpm install` and commit `pnpm-lock.yaml` together.
 
-16. **Workspace script ordering matters.** CI builds `@scenegraph/contracts` before the workspace-wide typecheck/build because downstream packages import it. New packages that depend on contracts must be added to that ordering.
+16. **Workspace script ordering matters.** CI builds `@scenegraph/contracts` and `@scenegraph/media-store` before the workspace-wide typecheck/build because downstream packages import their built entrypoints. New shared packages must be added to that ordering.

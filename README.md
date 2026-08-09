@@ -13,13 +13,14 @@ A user supplies a product brief and records one authentic journey. SceneGraph re
 - `apps/studio` — fresh product workspaces, capture state, directing timeline, render progress, playback and download
 - `apps/recorder-extension` — clean tab video plus DOM-anchored clicks, input, focus, scroll and navigation metadata
 - `services/director` — product-specific narrative, scene and camera planning
-- `services/render-worker` — queued Remotion rendering to H.264/AAC MP4
+- `services/render-worker` — memory-bounded Remotion rendering on Modal, with a local worker fallback
 - `packages/contracts` — validated capture, scene-plan and render-job schemas
+- `packages/media-store` — private Cloudflare R2 media storage and short-lived signed asset URLs
 
 ## Current maturity
 
-- **Early access:** fresh workspaces, token-protected clean tab capture, exact DOM anchors, sensitive-field masking, signed capture/render assets, persistent Docker volumes, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, server-side H.264 composition, render status, playback and download.
-- **In progress:** multi-user identity, database/object-storage persistence and recorded voice revisions.
+- **Early access:** fresh workspaces, token-protected clean tab capture, exact DOM anchors, sensitive-field masking, private R2 media, short-lived asset URLs, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, on-demand Modal rendering, 720p previews, 1080p60 masters, playback and download.
+- **In progress:** multi-user identity, database persistence, media lifecycle automation and recorded voice revisions.
 - **Product direction:** GitHub-triggered feature films.
 
 The renderer deliberately creates separate editorial frames and reframes selected product moments. It does not label the source recording as a generated film.
@@ -39,7 +40,7 @@ Load the unpacked extension from `apps/recorder-extension`, create a project at 
 
 ## GroundControl deployment
 
-SceneGraph ships as a complete Compose application with one public gateway and private Studio, Director, render-worker and Redis services. See [docs/GROUNDCONTROL.md](docs/GROUNDCONTROL.md) for the deployment, verification and rollback procedure.
+SceneGraph ships a lean GroundControl control plane with one public gateway and private Studio, Director and Redis services. Captures and films live in R2; Modal starts the Chromium renderer only for active jobs. See [docs/GROUNDCONTROL.md](docs/GROUNDCONTROL.md) for deployment, verification and rollback.
 
 ## Definition of done
 
@@ -47,7 +48,7 @@ SceneGraph ships as a complete Compose application with one public gateway and p
 - precise clicks, typing, scrolling and focus metadata
 - product-specific marketing script and scene plan
 - editable camera, text, cursor and transition direction
-- deterministic server render
+- economical 720p review render and deterministic 1080p60 master
 - H.264 MP4 output with web-optimized metadata
 - persistent projects and versioned outputs
 

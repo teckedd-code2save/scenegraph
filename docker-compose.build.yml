@@ -1,0 +1,13 @@
+services:
+  studio:
+    build:
+      context: .
+      dockerfile: apps/studio/Dockerfile
+  director:
+    build:
+      context: .
+      dockerfile: services/director/Dockerfile
+  render-worker:
+    build:
+      context: .
+      dockerfile: services/render-worker/Dockerfile

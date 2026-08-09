@@ -63,25 +63,32 @@ $("#refresh").addEventListener("click", async () => {
   if (response.ok) {project = await response.json(); showProject();}
 });
 
-$("#generate").addEventListener("click", async () => {
+async function requestRender(pathname, waitingMessage) {
   $("#generate").disabled = true;
-  const response = await request(`/v1/projects/${project.id}/first-cut`, {method: "POST"});
+  $("#master").disabled = true;
+  $("#player").hidden = true;
+  $("#stage").hidden = false;
+  const response = await request(`/v1/projects/${project.id}/${pathname}`, {method: "POST"});
   if (!response.ok) {
     const problem = await response.json();
     $("#notice").textContent = problem.error ?? "First cut could not be queued.";
     $("#generate").disabled = false;
+    $("#master").disabled = false;
     return;
   }
   const queued = await response.json();
-  project.plans.push(queued.plan);
+  if (!project.plans.some((plan) => plan.id === queued.plan.id)) project.plans.push(queued.plan);
   render = {jobId: queued.jobId, state: "waiting"};
   timeline(queued.plan.scenes);
-  $("#stageMessage").textContent = "Render waiting";
+  $("#stageMessage").textContent = waitingMessage;
   $("#progress").hidden = false;
   $("#notice").textContent = "The directing plan is locked. Rendering the new composition now.";
   clearInterval(poll);
   poll = setInterval(checkRender, 1500);
-});
+}
+
+$("#generate").addEventListener("click", () => requestRender("first-cut", "Preview waiting"));
+$("#master").addEventListener("click", () => requestRender("master", "1080p master waiting"));
 
 async function checkRender() {
   const response = await request(`/v1/projects/${project.id}/renders/${render.jobId}`);
@@ -94,8 +101,15 @@ async function checkRender() {
     $("#stage").hidden = true; $("#player").hidden = false;
     $("#player video").src = render.downloadUrl;
     $("#player a").href = render.downloadUrl;
+    $("#quality").textContent = render.profile === "master" ? "Master · 1080p · 60 fps" : "Preview · 720p · 30 fps";
+    $("#master").hidden = render.profile === "master";
+    $("#master").disabled = false;
+    $("#generate").disabled = false;
   }
-  if (render.state === "failed") {clearInterval(poll); $("#progress").hidden = true;}
+  if (render.state === "failed") {
+    clearInterval(poll); $("#progress").hidden = true;
+    $("#generate").disabled = false; $("#master").disabled = false;
+  }
 }
 
 timeline();

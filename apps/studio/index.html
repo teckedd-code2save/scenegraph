@@ -36,7 +36,7 @@
     <section id="workspace" class="workspace" hidden>
       <div class="workspaceHead">
         <div><p class="eyebrow">Launch workspace</p><h1 id="promise"></h1></div>
-        <div class="actions"><button id="refresh" class="secondary">Refresh capture</button><button id="generate">Generate first cut →</button></div>
+        <div class="actions"><button id="refresh" class="secondary">Refresh capture</button><button id="master" class="secondary" hidden>Render 1080p master</button><button id="generate">Generate preview →</button></div>
       </div>
       <div class="captureStep">
         <span id="captureStatus" class="status">Awaiting clean capture</span>
@@ -47,7 +47,7 @@
         <div class="stageMark">SG</div><p id="stageMessage">Your clean product film will appear here.</p>
         <div id="progress" class="progress" hidden><i></i></div><p id="renderError" class="error"></p>
       </div>
-      <div id="player" class="player" hidden><video controls></video><a class="download" download>Download directed MP4 ↓</a></div>
+      <div id="player" class="player" hidden><video controls></video><span id="quality" class="quality"></span><a class="download" download>Download directed MP4 ↓</a></div>
       <div id="timeline" class="timeline"></div>
       <p id="notice" class="notice"></p>
     </section>

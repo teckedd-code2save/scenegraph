@@ -35,7 +35,7 @@ const stopAndUpload = async (message: Record<string, unknown>) => {
     body: blob,
   });
   if (!uploaded.ok) throw new Error(`Video upload failed (${uploaded.status})`);
-  const {videoUrl} = await uploaded.json() as {videoUrl: string};
+  const {videoUrl, assetKey} = await uploaded.json() as {videoUrl: string; assetKey?: string};
   const manifest = {
     id: captureId,
     projectId,
@@ -44,6 +44,7 @@ const stopAndUpload = async (message: Record<string, unknown>) => {
     durationMs: message.durationMs,
     viewport: message.viewport,
     videoUrl,
+    assetKey,
     events: message.events,
   };
   const finalized = await fetch(`${apiUrl}/v1/projects/${projectId}/captures`, {

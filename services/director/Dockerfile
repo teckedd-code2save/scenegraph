@@ -5,10 +5,12 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/contracts/ packages/contracts/
+COPY packages/media-store/ packages/media-store/
 COPY services/director/ services/director/
 
-RUN pnpm install --frozen-lockfile --filter @scenegraph/contracts --filter @scenegraph/director \
+RUN pnpm install --frozen-lockfile --filter @scenegraph/contracts --filter @scenegraph/media-store --filter @scenegraph/director \
   && pnpm --filter @scenegraph/contracts build \
+  && pnpm --filter @scenegraph/media-store build \
   && pnpm --filter @scenegraph/director build \
   && mkdir -p /data/projects /data/renders \
   && chown -R node:node /data
