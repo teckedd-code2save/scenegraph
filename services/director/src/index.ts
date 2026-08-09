@@ -14,6 +14,7 @@ import {
   scenePlanSchema,
   renderJobSchema,
   renderResultSchema,
+  type CaptureEvent,
   type CaptureManifest,
   type ProductBrief,
   type ScenePlan,
@@ -39,9 +40,45 @@ const journeyName = (brief: ProductBrief, capture: CaptureManifest) => {
   }
 };
 
+type Rect = {x: number; y: number; width: number; height: number};
+type EvidenceEvent = CaptureEvent & {
+  rect?: Rect;
+  tagName?: string;
+  role?: string;
+  label?: string;
+  text?: string;
+};
+type SnapshotEvent = EvidenceEvent & {
+  kind: "snapshot";
+  title?: string;
+  visibleText: string[];
+  elements: Array<{
+    selector: string;
+    rect: Rect;
+    tagName: string;
+    role?: string;
+    label?: string;
+    text?: string;
+  }>;
+};
+
+const isInteractionEvent = (event: CaptureEvent): event is EvidenceEvent & {rect: Rect} =>
+  ["click", "focus", "input"].includes(String(event.kind)) && Boolean(event.rect);
+
+const isSnapshotEvent = (event: CaptureEvent): event is SnapshotEvent =>
+  String(event.kind) === "snapshot";
+
+const eventRect = (event: EvidenceEvent) =>
+  event.rect ?? (isSnapshotEvent(event) ? event.elements[0]?.rect : undefined);
+
+const eventLabel = (event: EvidenceEvent) => {
+  if (isSnapshotEvent(event)) return event.title || event.visibleText[0] || "Captured product state";
+  return event.label || event.text || event.selector || "Captured interaction";
+};
+
 const compactEvents = (capture: CaptureManifest) => {
   const useful = capture.events
-    .filter((event) => ["click", "focus", "input"].includes(event.kind) && event.rect)
+    .filter(isInteractionEvent)
     .sort((left, right) => left.atMs - right.atMs);
   const selected: typeof useful = [];
   for (const event of useful) {
@@ -53,14 +90,17 @@ const compactEvents = (capture: CaptureManifest) => {
 };
 
 const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest): ScenePlan => {
-  const events = compactEvents(capture);
-  if (events.length === 0) {
-    throw new Error("SceneGraph cannot direct this capture because it contains no explainable product interactions.");
+  const interactions = compactEvents(capture);
+  const snapshots = capture.events.filter(isSnapshotEvent).sort((left, right) => left.atMs - right.atMs);
+  const evidenceEvents = [...interactions, ...snapshots].sort((left, right) => left.atMs - right.atMs);
+  if (evidenceEvents.length === 0) {
+    throw new Error("SceneGraph capture is missing UI evidence. The recorder did not provide snapshots or interaction anchors.");
   }
-  const clicks = events.filter((event) => event.kind === "click");
-  const firstInteraction = events[0];
-  const secondInteraction = events.find((event) => firstInteraction && event.atMs - firstInteraction.atMs > 3_000) ?? clicks[1] ?? events[1] ?? firstInteraction;
-  const earlyClick = clicks.find((event) => firstInteraction && event.atMs - firstInteraction.atMs < 25_000) ?? clicks[0] ?? firstInteraction;
+  const clicks = interactions.filter((event) => event.kind === "click");
+  const firstEvidence = evidenceEvents[0];
+  const firstInteraction = interactions[0] ?? firstEvidence;
+  const secondEvidence = evidenceEvents.find((event) => event.atMs - firstEvidence.atMs > 3_000) ?? evidenceEvents[1] ?? firstEvidence;
+  const earlyClick = clicks.find((event) => event.atMs - firstEvidence.atMs < 25_000) ?? clicks[0] ?? interactions[1] ?? secondEvidence;
   const journey = journeyName(brief, capture);
   const scenes = [
     {
@@ -68,50 +108,50 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       durationMs: 3200,
       headline: `${brief.productName} live control`,
       support: journey,
-      eventId: firstInteraction?.id,
+      eventId: firstEvidence.id,
       zoom: 1.08,
-      rationale: "Introduce the live product from the first recorded interaction instead of a synthetic title card.",
-      observation: "The user begins inside the captured product workspace.",
+      rationale: "Introduce the live product from recorder-supplied UI state instead of a synthetic title card.",
+      observation: `The recorder captured the starting product state: ${eventLabel(firstEvidence)}.`,
     },
     {
       role: "problem" as const,
       durationMs: 3800,
       headline: "Spot the runtime state",
       support: "Start from the real deployment surface.",
-      eventId: firstInteraction?.id,
+      eventId: firstInteraction.id,
       zoom: 1.18,
-      rationale: "Use the first actionable product state to establish what the viewer should inspect.",
-      observation: "The selected UI element marks the first operational focus in the journey.",
+      rationale: "Use the first actionable product evidence to establish what the viewer should inspect.",
+      observation: `The first actionable evidence is ${eventLabel(firstInteraction)}.`,
     },
     {
       role: "action" as const,
       durationMs: 4200,
       headline: "Open the operational signal",
       support: "The cut follows the actual interaction path.",
-      eventId: earlyClick?.id ?? firstInteraction?.id,
+      eventId: earlyClick.id,
       zoom: 1.34,
-      rationale: "Show a recorded click/focus event as the cause of the next product state.",
-      observation: "A user interaction occurs on a visible product control.",
+      rationale: "Show the recorder-supplied action that causes the next product state.",
+      observation: `The action is anchored to ${eventLabel(earlyClick)}.`,
     },
     {
       role: "outcome" as const,
       durationMs: 4200,
       headline: "Inspect the evidence",
       support: "Failure context stays attached to the screen.",
-      eventId: secondInteraction?.id ?? earlyClick?.id,
+      eventId: secondEvidence.id,
       zoom: 1.28,
       rationale: "Hold on the resulting product context so the viewer sees why the interaction mattered.",
-      observation: "The capture contains a later focused/clicked element in the same workflow.",
+      observation: `A later captured state or interaction appears at ${Math.round(secondEvidence.atMs)}ms.`,
     },
     {
       role: "proof" as const,
       durationMs: 3600,
       headline: "Action stays in context",
       support: "Every pointer and zoom is anchored to the capture.",
-      eventId: earlyClick?.id ?? secondInteraction?.id,
+      eventId: earlyClick.id,
       zoom: 1.18,
-      rationale: "Close the preview on an explainable interaction rather than a generic marketing claim.",
-      observation: "The final preview beat is still tied to a captured UI anchor.",
+      rationale: "Close the preview on explainable recorder evidence rather than a generic marketing claim.",
+      observation: `The closing beat references ${eventLabel(earlyClick)}.`,
     },
   ];
   let startMs = 0;
@@ -120,11 +160,12 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     scene: typeof scenes[number],
   ): ScenePlan["scenes"][number] => {
     const event = capture.events.find((candidate) => candidate.id === scene.eventId);
-    if (!event?.rect) {
-      throw new Error(`SceneGraph refused to render the ${scene.role} scene because it has no captured UI evidence.`);
+    if (!event) {
+      throw new Error(`SceneGraph refused to render the ${scene.role} scene because its evidence event is missing.`);
     }
-    const centerX = event?.rect ? event.rect.x + event.rect.width / 2 : capture.viewport.width / 2;
-    const centerY = event?.rect ? event.rect.y + event.rect.height / 2 : capture.viewport.height / 2;
+    const rect = eventRect(event);
+    const centerX = rect ? rect.x + rect.width / 2 : capture.viewport.width / 2;
+    const centerY = rect ? rect.y + rect.height / 2 : capture.viewport.height / 2;
     const fromMs = event
       ? Math.max(0, Math.min(event.atMs - 1800, capture.durationMs - scene.durationMs - 1))
       : Math.max(0, Math.min(index * 3000, capture.durationMs - scene.durationMs - 1));
@@ -139,14 +180,14 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       support: scene.support,
       rationale: scene.rationale,
       evidence: {
-        kind: event.kind === "click" ? "transition" : "interaction",
+        kind: isSnapshotEvent(event) ? "state" : event.kind === "click" ? "transition" : "interaction",
         eventIds: [event.id],
         sourceMs: event.atMs,
         observation: scene.observation,
       },
       source: {fromMs, toMs: Math.min(fromMs + scene.durationMs, capture.durationMs)},
       camera: camera(scene.zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
-      focusEventIds: scene.eventId ? [scene.eventId] : [],
+      focusEventIds: rect ? [scene.eventId] : [],
       transition: index === 0 ? "cut" : index % 3 === 0 ? "match" : "mask",
     };
   };

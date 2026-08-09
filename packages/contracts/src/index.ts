@@ -24,6 +24,19 @@ const eventBase = z.object({
   atMs: z.number().nonnegative(),
   selector: z.string().optional(),
   rect: rectSchema.optional(),
+  tagName: z.string().optional(),
+  role: z.string().optional(),
+  label: z.string().optional(),
+  text: z.string().optional(),
+});
+
+const stateElementSchema = z.object({
+  selector: z.string(),
+  rect: rectSchema,
+  tagName: z.string(),
+  role: z.string().optional(),
+  label: z.string().optional(),
+  text: z.string().optional(),
 });
 
 export const captureEventSchema = z.discriminatedUnion("kind", [
@@ -32,6 +45,13 @@ export const captureEventSchema = z.discriminatedUnion("kind", [
   eventBase.extend({kind: z.literal("focus")}),
   eventBase.extend({kind: z.literal("scroll"), x: z.number(), y: z.number()}),
   eventBase.extend({kind: z.literal("navigation"), url: z.string().url()}),
+  eventBase.extend({
+    kind: z.literal("snapshot"),
+    url: z.string().url(),
+    title: z.string().optional(),
+    visibleText: z.array(z.string().min(1)).max(80),
+    elements: z.array(stateElementSchema).max(80),
+  }),
 ]);
 
 export const captureManifestSchema = z.object({

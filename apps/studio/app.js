@@ -37,11 +37,21 @@ const resetPlayer = () => {
 };
 
 const waitForVideo = (video) => new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => {
+    cleanup();
+    reject(new Error("The video file did not become playable."));
+  }, 12_000);
   const cleanup = () => {
-    video.removeEventListener("canplay", handleReady);
+    clearTimeout(timeout);
+    video.removeEventListener("loadedmetadata", handleReady);
     video.removeEventListener("error", handleError);
   };
   const handleReady = () => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      cleanup();
+      reject(new Error("The render finished, but the video has no playable duration."));
+      return;
+    }
     cleanup();
     resolve();
   };
@@ -49,7 +59,7 @@ const waitForVideo = (video) => new Promise((resolve, reject) => {
     cleanup();
     reject(new Error("The video file could not be loaded."));
   };
-  video.addEventListener("canplay", handleReady, {once: true});
+  video.addEventListener("loadedmetadata", handleReady, {once: true});
   video.addEventListener("error", handleError, {once: true});
 });
 

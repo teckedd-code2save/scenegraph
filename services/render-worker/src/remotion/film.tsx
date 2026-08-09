@@ -6,7 +6,20 @@ import {
 import type {CaptureEvent, RenderJob, ScenePlan} from "@scenegraph/contracts";
 
 type Scene = ScenePlan["scenes"][number];
+type Rect = {x: number; y: number; width: number; height: number};
+type VisualEvent = CaptureEvent & {rect: Rect};
 const font = "Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, sans-serif";
+
+const snapshotRect = (event: CaptureEvent) =>
+  event.kind === "snapshot" ? event.elements[0]?.rect : undefined;
+
+const eventRect = (event: CaptureEvent) => event.rect ?? snapshotRect(event);
+
+const visualEvent = (event: CaptureEvent | undefined): VisualEvent | undefined => {
+  if (!event) return undefined;
+  const rect = eventRect(event);
+  return rect ? {...event, rect} : undefined;
+};
 
 const Editorial: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
   const frame = useCurrentFrame();
@@ -94,14 +107,13 @@ const SceneLabel: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
 };
 
 const Cursor: React.FC<{
-  event: CaptureEvent;
+  event: VisualEvent;
   viewport: RenderJob["capture"]["viewport"];
   sourceFromMs: number;
   color: string;
 }> = ({event, viewport, sourceFromMs, color}) => {
   const frame = useCurrentFrame();
   const {fps, width, height} = useVideoConfig();
-  if (!event.rect) return null;
   const targetX = (event.rect.x + event.rect.width / 2) / viewport.width * width;
   const targetY = (event.rect.y + event.rect.height / 2) / viewport.height * height;
   const eventFrame = Math.max(0, Math.round((event.atMs - sourceFromMs) / 1000 * fps));
@@ -138,13 +150,12 @@ const Cursor: React.FC<{
 };
 
 const TargetHighlight: React.FC<{
-  event: CaptureEvent;
+  event: VisualEvent;
   viewport: RenderJob["capture"]["viewport"];
   color: string;
 }> = ({event, viewport, color}) => {
   const frame = useCurrentFrame();
   const {width, height, fps} = useVideoConfig();
-  if (!event.rect) return null;
   const pulse = spring({frame, fps, config: {damping: 24, stiffness: 85}});
   const left = event.rect.x / viewport.width * width;
   const top = event.rect.y / viewport.height * height;
@@ -172,9 +183,13 @@ const Product: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
   const sourceFromMs = scene.source?.fromMs ?? 0;
   const sourceToMs = scene.source?.toMs ?? sourceFromMs + scene.durationMs;
   const sceneEvents = job.capture.events
-    .filter((candidate) => candidate.rect && candidate.atMs >= sourceFromMs - 400 && candidate.atMs <= sourceToMs + 800)
+    .map(visualEvent)
+    .filter((candidate): candidate is VisualEvent => {
+      if (!candidate) return false;
+      return candidate.atMs >= sourceFromMs - 400 && candidate.atMs <= sourceToMs + 800;
+    })
     .sort((left, right) => left.atMs - right.atMs);
-  const plannedEvent = job.capture.events.find((candidate) => scene.focusEventIds.includes(candidate.id));
+  const plannedEvent = visualEvent(job.capture.events.find((candidate) => scene.focusEventIds.includes(candidate.id)));
   const currentSourceMs = sourceFromMs + frame / fps * 1000;
   const event = sceneEvents
     .filter((candidate) => candidate.atMs <= currentSourceMs + 600)
