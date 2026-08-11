@@ -124,6 +124,21 @@ const showProject = () => {
   timeline(project.plans.at(-1)?.scenes);
 };
 
+const showCreate = () => {
+  clearInterval(poll);
+  localStorage.removeItem("scenegraphActiveProjectId");
+  project = null;
+  render = null;
+  $("#workspace").hidden = true;
+  $("#create").hidden = false;
+  $("#projectLabel").hidden = true;
+  $("#projectLabel").textContent = "";
+  $("#restoreId").value = "";
+  $("#createNotice").textContent = "Create a workspace for this product.";
+  resetPlayer();
+  timeline();
+};
+
 const loadProject = async (id, quiet = false) => {
   if (!id) return false;
   accessToken = $("#accessToken").value.trim();
@@ -171,6 +186,8 @@ $("#refresh").addEventListener("click", async () => {
   const response = await request(`/v1/projects/${project.id}`);
   if (response.ok) {project = await response.json(); showProject();}
 });
+
+$("#newWorkspace").addEventListener("click", showCreate);
 
 async function requestRender(pathname, waitingMessage) {
   $("#generate").disabled = true;
