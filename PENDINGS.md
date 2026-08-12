@@ -18,7 +18,7 @@
 
 ## Capture & Recorder
 
-7. **Recorder setup is manual.** The extension is loaded unpacked and requires the project ID to be pasted into its popup — there is no one-click pairing flow yet. Debug flows must replicate this manually.
+7. **Recorder pairing is one-click.** The studio workspace's **Pair recorder** button copies a `scenegraph-pair:` payload (API URL, project ID, access token) to the clipboard; the extension popup's **Pair with workspace** button binds in one click — **fixed** `5c73a81`. Manual project-ID entry remains the fallback.
 
 8. **Clean-tab recording is a requirement, not a nicety.** Captures must exclude browser chrome. If a capture regresses to include the browser UI, treat it as a bug.
 
