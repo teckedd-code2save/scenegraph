@@ -25,6 +25,35 @@ const escape = (value) => String(value).replace(/[&<>"']/g, (character) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 })[character]);
 
+const defaultJourney = (brief) => ({
+  goal: `Show how ${brief.productName} turns a specific product problem into a verified outcome.`,
+  startState: brief.customerProblem,
+  keyBeats: ["Inspect the starting state", "Take the decisive product action", "Verify the result"],
+  successState: brief.launchPromise,
+  avoid: "Do not use generic scenes unless they match captured product evidence.",
+});
+
+const journeyFromForm = (form) => {
+  const values = Object.fromEntries(new FormData(form));
+  return {
+    goal: values.goal,
+    startState: values.startState,
+    keyBeats: String(values.keyBeats).split(/\n+/).map((beat) => beat.trim()).filter(Boolean),
+    successState: values.successState,
+    avoid: values.avoid || undefined,
+  };
+};
+
+const setJourneyForm = () => {
+  const journey = project.brief.journey ?? defaultJourney(project.brief);
+  const form = $("#journey");
+  form.elements.goal.value = journey.goal;
+  form.elements.startState.value = journey.startState;
+  form.elements.keyBeats.value = journey.keyBeats.join("\n");
+  form.elements.successState.value = journey.successState;
+  form.elements.avoid.value = journey.avoid ?? "";
+};
+
 const resetPlayer = () => {
   const video = $("#renderVideo");
   $("#player").hidden = true;
@@ -121,6 +150,7 @@ const showProject = () => {
   $("#captureStatus").textContent = ready ? "Capture ready" : "Awaiting clean capture";
   $("#captureStatus").className = ready ? "status ready" : "status";
   $("#generate").disabled = !ready;
+  setJourneyForm();
   timeline(project.plans.at(-1)?.scenes);
 };
 
@@ -171,9 +201,25 @@ $("#brief").addEventListener("submit", async (event) => {
   const button = event.currentTarget.querySelector("button");
   button.disabled = true; button.textContent = "Creating…";
   const values = Object.fromEntries(new FormData(event.currentTarget));
+  const journey = {
+    goal: values.journeyGoal,
+    startState: values.journeyStartState,
+    keyBeats: String(values.journeyKeyBeats).split(/\n+/).map((beat) => beat.trim()).filter(Boolean),
+    successState: values.journeySuccessState,
+    avoid: values.journeyAvoid || undefined,
+  };
   const response = await request("/v1/projects", {
     method: "POST", headers: {"content-type": "application/json"},
-    body: JSON.stringify({...values, tone: "precise", brand: {primary: values.primary, surface: "#F5F5F1", ink: "#111411"}}),
+    body: JSON.stringify({
+      productName: values.productName,
+      productUrl: values.productUrl,
+      customerProblem: values.customerProblem,
+      audience: values.audience,
+      launchPromise: values.launchPromise,
+      journey,
+      tone: "precise",
+      brand: {primary: values.primary, surface: "#F5F5F1", ink: "#111411"},
+    }),
   }).catch(() => null);
   button.disabled = false; button.textContent = "Create product workspace →";
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
@@ -188,6 +234,25 @@ $("#refresh").addEventListener("click", async () => {
 });
 
 $("#newWorkspace").addEventListener("click", showCreate);
+
+$("#journey").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector("button");
+  button.disabled = true; button.textContent = "Saving...";
+  const response = await request(`/v1/projects/${project.id}/brief`, {
+    method: "PUT",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify({...project.brief, journey: journeyFromForm(event.currentTarget)}),
+  }).catch(() => null);
+  button.disabled = false; button.textContent = "Save direction";
+  if (!response?.ok) {
+    $("#notice").textContent = "Direction could not be saved.";
+    return;
+  }
+  project = await response.json();
+  showProject();
+  $("#notice").textContent = "Direction saved. The next preview will follow this journey.";
+});
 
 async function requestRender(pathname, waitingMessage) {
   $("#generate").disabled = true;

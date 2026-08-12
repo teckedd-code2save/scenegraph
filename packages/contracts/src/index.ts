@@ -11,6 +11,13 @@ export const productBriefSchema = z.object({
   customerProblem: z.string().min(12),
   audience: z.string().min(3),
   launchPromise: z.string().min(8),
+  journey: z.object({
+    goal: z.string().min(12).max(240),
+    startState: z.string().min(8).max(180),
+    keyBeats: z.array(z.string().min(3).max(120)).min(1).max(7),
+    successState: z.string().min(8).max(180),
+    avoid: z.string().max(240).optional(),
+  }).optional(),
   tone: z.enum(["precise", "bold", "warm", "technical"]).default("precise"),
   brand: z.object({
     primary: z.string().regex(/^#[0-9a-f]{6}$/i),

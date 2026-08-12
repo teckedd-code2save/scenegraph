@@ -76,6 +76,53 @@ const eventLabel = (event: EvidenceEvent) => {
   return event.label || event.text || event.selector || "Captured interaction";
 };
 
+const eventText = (event: EvidenceEvent) => {
+  const parts = [eventLabel(event), event.selector, event.role, event.tagName, event.text];
+  if (isSnapshotEvent(event)) {
+    parts.push(event.title, ...event.visibleText, ...event.elements.flatMap((element) => [
+      element.selector, element.role, element.label, element.text, element.tagName,
+    ]));
+  }
+  return parts.filter(Boolean).join(" ").toLowerCase();
+};
+
+const wordsFor = (value: string) =>
+  value.toLowerCase().match(/[a-z0-9]+/g)?.filter((word) => word.length > 2) ?? [];
+
+const titleCase = (value: string) =>
+  value.trim().replace(/\s+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
+
+const shortSentence = (value: string, max = 70) => {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1).trim()}…`;
+};
+
+const evidenceFor = (
+  events: EvidenceEvent[],
+  query: string,
+  fallback: EvidenceEvent,
+  usedIds = new Set<string>(),
+) => {
+  const words = wordsFor(query);
+  const phrase = query.toLowerCase().trim();
+  const scored = events.map((event) => {
+    const directText = [event.label, event.text, event.selector].filter(Boolean).join(" ").toLowerCase();
+    const snapshotText = isSnapshotEvent(event)
+      ? [...event.visibleText, ...event.elements.flatMap((element) => [element.label, element.text, element.selector])]
+        .filter(Boolean).join(" ").toLowerCase()
+      : "";
+    const fullText = `${directText} ${snapshotText} ${eventText(event)}`;
+    const directScore = words.reduce((sum, word) => sum + (directText.includes(word) ? 4 : 0), 0);
+    const snapshotScore = words.reduce((sum, word) => sum + (snapshotText.includes(word) ? 1 : 0), 0);
+    const phraseScore = phrase && fullText.includes(phrase) ? 6 : 0;
+    const specificity = isSnapshotEvent(event) ? 0 : 1.25;
+    const reusePenalty = usedIds.has(event.id) ? 5 : 0;
+    const score = directScore + snapshotScore + phraseScore + specificity - reusePenalty;
+    return {event, score};
+  }).sort((left, right) => right.score - left.score || left.event.atMs - right.event.atMs);
+  return scored[0]?.score > 0 ? scored[0].event : fallback;
+};
+
 const compactEvents = (capture: CaptureManifest) => {
   const useful = capture.events
     .filter(isInteractionEvent)
@@ -102,56 +149,72 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const secondEvidence = evidenceEvents.find((event) => event.atMs - firstEvidence.atMs > 3_000) ?? evidenceEvents[1] ?? firstEvidence;
   const earlyClick = clicks.find((event) => event.atMs - firstEvidence.atMs < 25_000) ?? clicks[0] ?? interactions[1] ?? secondEvidence;
   const journey = journeyName(brief, capture);
+  const journeyBrief = brief.journey;
+  const used = new Set<string>();
+  const choose = (query: string, fallback: EvidenceEvent) => {
+    const event = evidenceFor(evidenceEvents, query, fallback, used);
+    used.add(event.id);
+    return event;
+  };
+  const startEvent = journeyBrief ? choose(journeyBrief.startState, firstEvidence) : firstEvidence;
+  const firstBeat = journeyBrief?.keyBeats[0];
+  const secondBeat = journeyBrief?.keyBeats[1] ?? firstBeat;
+  const thirdBeat = journeyBrief?.keyBeats[2] ?? secondBeat;
+  const actionEvent = journeyBrief && firstBeat ? choose(firstBeat, earlyClick) : earlyClick;
+  const outcomeEvent = journeyBrief && secondBeat ? choose(secondBeat, secondEvidence) : secondEvidence;
+  const proofEvent = journeyBrief ? choose(`${journeyBrief.successState} ${thirdBeat ?? ""}`, outcomeEvent) : earlyClick;
   const scenes = [
     {
       role: "hook" as const,
       durationMs: 3200,
-      headline: `${brief.productName} live control`,
-      support: journey,
-      eventId: firstEvidence.id,
+      headline: journeyBrief ? shortSentence(journeyBrief.goal, 56) : `${brief.productName} live control`,
+      support: journeyBrief ? brief.productName : journey,
+      eventId: startEvent.id,
       zoom: 1.08,
-      rationale: "Introduce the live product from recorder-supplied UI state instead of a synthetic title card.",
-      observation: `The recorder captured the starting product state: ${eventLabel(firstEvidence)}.`,
+      rationale: journeyBrief
+        ? "Introduce the declared demo goal using matching captured product state."
+        : "Introduce the live product from recorder-supplied UI state instead of a synthetic title card.",
+      observation: `The recorder captured the starting product state: ${eventLabel(startEvent)}.`,
     },
     {
       role: "problem" as const,
       durationMs: 3800,
-      headline: "Spot the runtime state",
-      support: "Start from the real deployment surface.",
-      eventId: firstInteraction.id,
+      headline: journeyBrief ? shortSentence(journeyBrief.startState, 56) : "Spot the runtime state",
+      support: journeyBrief ? "Start from the captured before state." : "Start from the real deployment surface.",
+      eventId: startEvent.id,
       zoom: 1.18,
-      rationale: "Use the first actionable product evidence to establish what the viewer should inspect.",
-      observation: `The first actionable evidence is ${eventLabel(firstInteraction)}.`,
+      rationale: "Use captured product evidence to establish the before state.",
+      observation: `The before-state evidence is ${eventLabel(startEvent)}.`,
     },
     {
       role: "action" as const,
       durationMs: 4200,
-      headline: "Open the operational signal",
-      support: "The cut follows the actual interaction path.",
-      eventId: earlyClick.id,
+      headline: firstBeat ? titleCase(shortSentence(firstBeat, 52)) : "Open the operational signal",
+      support: "The cut follows captured UI evidence.",
+      eventId: actionEvent.id,
       zoom: 1.34,
-      rationale: "Show the recorder-supplied action that causes the next product state.",
-      observation: `The action is anchored to ${eventLabel(earlyClick)}.`,
+      rationale: "Match the first requested journey beat to recorder evidence.",
+      observation: `The action beat is anchored to ${eventLabel(actionEvent)}.`,
     },
     {
       role: "outcome" as const,
       durationMs: 4200,
-      headline: "Inspect the evidence",
-      support: "Failure context stays attached to the screen.",
-      eventId: secondEvidence.id,
+      headline: secondBeat ? titleCase(shortSentence(secondBeat, 52)) : "Inspect the evidence",
+      support: journeyBrief ? "The next beat stays attached to the screen." : "Failure context stays attached to the screen.",
+      eventId: outcomeEvent.id,
       zoom: 1.28,
-      rationale: "Hold on the resulting product context so the viewer sees why the interaction mattered.",
-      observation: `A later captured state or interaction appears at ${Math.round(secondEvidence.atMs)}ms.`,
+      rationale: "Hold on the journey beat that explains what changed after the action.",
+      observation: `The outcome beat appears at ${Math.round(outcomeEvent.atMs)}ms: ${eventLabel(outcomeEvent)}.`,
     },
     {
       role: "proof" as const,
       durationMs: 3600,
-      headline: "Action stays in context",
-      support: "Every pointer and zoom is anchored to the capture.",
-      eventId: earlyClick.id,
+      headline: journeyBrief ? shortSentence(journeyBrief.successState, 56) : "Action stays in context",
+      support: "Every claim is tied to captured UI evidence.",
+      eventId: proofEvent.id,
       zoom: 1.18,
       rationale: "Close the preview on explainable recorder evidence rather than a generic marketing claim.",
-      observation: `The closing beat references ${eventLabel(earlyClick)}.`,
+      observation: `The proof beat references ${eventLabel(proofEvent)}.`,
     },
   ];
   let startMs = 0;
@@ -355,6 +418,15 @@ app.get("/v1/projects/:id", async (request, reply) => {
   } catch {
     return reply.code(404).send({error: "Project not found"});
   }
+});
+
+app.put("/v1/projects/:id/brief", async (request, reply) => {
+  const {id} = request.params as {id: string};
+  const project = await loadProject(id);
+  project.brief = productBriefSchema.parse(request.body);
+  project.plans = [];
+  await saveProject(project);
+  return reply.code(200).send(project);
 });
 
 app.put("/v1/projects/:id/captures/:captureId/video", async (request, reply) => {
