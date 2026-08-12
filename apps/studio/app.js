@@ -262,7 +262,8 @@ async function requestRender(pathname, waitingMessage) {
   const response = await request(`/v1/projects/${project.id}/${pathname}`, {method: "POST"});
   if (!response.ok) {
     const problem = await response.json();
-    $("#notice").textContent = problem.error ?? "First cut could not be queued.";
+    const missing = problem.details?.missing?.map((item) => `${item.label} (${item.grade})`).join("; ");
+    $("#notice").textContent = missing ? `${problem.error} Missing: ${missing}` : problem.error ?? "First cut could not be queued.";
     $("#generate").disabled = false;
     $("#master").disabled = false;
     return;

@@ -66,14 +66,18 @@ type EvidenceMatch = {
   score: number;
   grade: "strong" | "usable" | "weak" | "missing";
   matchedWords: string[];
+  reason: string;
+  kind: "state" | "transition" | "interaction";
 };
 
 class PlanningError extends Error {
   statusCode: number;
-  constructor(message: string, statusCode = 409) {
+  details?: unknown;
+  constructor(message: string, statusCode = 409, details?: unknown) {
     super(message);
     this.name = "PlanningError";
     this.statusCode = statusCode;
+    this.details = details;
   }
 }
 
@@ -101,8 +105,97 @@ const eventText = (event: EvidenceEvent) => {
   return parts.filter(Boolean).join(" ").toLowerCase();
 };
 
+type GraphNode = {
+  id: string;
+  event: EvidenceEvent;
+  atMs: number;
+  label: string;
+  text: string;
+  tokens: Set<string>;
+  quality: number;
+};
+type GraphEdge = {
+  id: string;
+  from: GraphNode;
+  to: GraphNode;
+  event: EvidenceEvent;
+  label: string;
+  text: string;
+  tokens: Set<string>;
+  quality: number;
+};
+type StateGraph = {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  events: EvidenceEvent[];
+};
+
+const stopWords = new Set([
+  "the", "and", "for", "with", "that", "this", "from", "into", "onto", "your", "you",
+  "how", "show", "visible", "product", "screen", "state", "current", "specific",
+]);
+
 const wordsFor = (value: string) =>
-  value.toLowerCase().match(/[a-z0-9]+/g)?.filter((word) => word.length > 2) ?? [];
+  value.toLowerCase().match(/[a-z0-9]+/g)?.filter((word) => word.length > 2 && !stopWords.has(word)) ?? [];
+
+const tokenSet = (value: string) => new Set(wordsFor(value));
+
+const tokenHits = (tokens: Set<string>, words: string[]) =>
+  words.filter((word) => tokens.has(word) || Array.from(tokens).some((token) => token.includes(word) || word.includes(token)));
+
+const textQuality = (text: string, event?: EvidenceEvent) => {
+  const tokens = tokenSet(text);
+  const direct = event && !isSnapshotEvent(event) ? 2 : 0;
+  const visual = event && eventRect(event) ? 1 : 0;
+  return Math.min(10, tokens.size / 7 + direct + visual);
+};
+
+const nearestNode = (nodes: GraphNode[], atMs: number, direction: "before" | "after") => {
+  const candidates = nodes
+    .filter((node) => direction === "before" ? node.atMs <= atMs : node.atMs >= atMs)
+    .sort((left, right) => direction === "before" ? right.atMs - left.atMs : left.atMs - right.atMs);
+  return candidates[0] ?? nodes.sort((left, right) => Math.abs(left.atMs - atMs) - Math.abs(right.atMs - atMs))[0];
+};
+
+const buildStateGraph = (capture: CaptureManifest): StateGraph => {
+  const evidenceEvents = capture.events.filter((event): event is EvidenceEvent => Boolean(eventRect(event) || isSnapshotEvent(event)))
+    .sort((left, right) => left.atMs - right.atMs);
+  const nodes = evidenceEvents
+    .filter(isSnapshotEvent)
+    .map((event) => {
+      const text = eventText(event);
+      return {
+        id: event.id,
+        event,
+        atMs: event.atMs,
+        label: eventLabel(event),
+        text,
+        tokens: tokenSet(text),
+        quality: textQuality(text, event),
+      };
+    });
+  const edges: GraphEdge[] = [];
+  for (const event of evidenceEvents.filter((candidate) => !isSnapshotEvent(candidate))) {
+      const from = nearestNode(nodes, event.atMs, "before");
+      const to = nearestNode(nodes, event.atMs, "after");
+      if (!from || !to) continue;
+      const text = eventText(event);
+      edges.push({
+        id: event.id,
+        from,
+        to,
+        event,
+        label: eventLabel(event),
+        text,
+        tokens: tokenSet(text),
+        quality: textQuality(text, event) + (to.id !== from.id ? 2 : 0),
+      });
+  }
+  return {nodes, edges, events: evidenceEvents};
+};
+
+const gradeFor = (score: number): EvidenceMatch["grade"] =>
+  score >= 9 ? "strong" : score >= 5 ? "usable" : score > 0 ? "weak" : "missing";
 
 const titleCase = (value: string) =>
   value.trim().replace(/\s+/g, " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -112,44 +205,92 @@ const shortSentence = (value: string, max = 70) => {
   return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1).trim()}…`;
 };
 
+const scoreEvidenceText = (
+  query: string,
+  text: string,
+  tokens: Set<string>,
+  quality: number,
+  reusePenalty: number,
+) => {
+  const words = wordsFor(query);
+  const phrase = query.toLowerCase().trim();
+  const hits = tokenHits(tokens, words);
+  if (words.length > 0 && hits.length === 0) return {score: 0, matchedWords: hits};
+  const phraseScore = phrase && text.includes(phrase) ? 6 : 0;
+  const coverage = words.length ? hits.length / words.length : 0;
+  return {
+    score: hits.length * 2.2 + coverage * 5 + phraseScore + quality - reusePenalty,
+    matchedWords: hits,
+  };
+};
+
 const evidenceFor = (
-  events: EvidenceEvent[],
+  graph: StateGraph,
   query: string,
   fallback: EvidenceEvent,
   usedIds = new Set<string>(),
 ): EvidenceMatch => {
-  const words = wordsFor(query);
-  const phrase = query.toLowerCase().trim();
-  const scored = events.map((event) => {
-    const directText = [event.label, event.text, event.selector].filter(Boolean).join(" ").toLowerCase();
-    const snapshotText = isSnapshotEvent(event)
-      ? [...event.visibleText, ...event.elements.flatMap((element) => [element.label, element.text, element.selector])]
-        .filter(Boolean).join(" ").toLowerCase()
-      : "";
-    const fullText = `${directText} ${snapshotText} ${eventText(event)}`;
-    const directScore = words.reduce((sum, word) => sum + (directText.includes(word) ? 4 : 0), 0);
-    const snapshotScore = words.reduce((sum, word) => sum + (snapshotText.includes(word) ? 1 : 0), 0);
-    const phraseScore = phrase && fullText.includes(phrase) ? 6 : 0;
-    const specificity = isSnapshotEvent(event) ? 0 : 1.25;
-    const reusePenalty = usedIds.has(event.id) ? 5 : 0;
-    const score = directScore + snapshotScore + phraseScore + specificity - reusePenalty;
-    const matchedWords = words.filter((word) => fullText.includes(word));
-    return {event, score, matchedWords};
-  }).sort((left, right) => right.score - left.score || left.event.atMs - right.event.atMs);
+  const nodeScores = graph.nodes.map((node) => {
+    const result = scoreEvidenceText(query, node.text, node.tokens, node.quality, usedIds.has(node.id) ? 5 : 0);
+    return {
+      event: node.event,
+      score: result.score,
+      matchedWords: result.matchedWords,
+      reason: `state "${node.label}" matched ${result.matchedWords.join(", ") || "no query terms"}`,
+      kind: "state" as const,
+    };
+  });
+  const edgeScores = graph.edges.map((edge) => {
+    const text = `${edge.text} ${edge.from.text} ${edge.to.text}`;
+    const tokens = new Set([...edge.tokens, ...edge.from.tokens, ...edge.to.tokens]);
+    const result = scoreEvidenceText(query, text, tokens, edge.quality, usedIds.has(edge.id) ? 5 : 0);
+    return {
+      event: edge.event,
+      score: result.score > 0 ? result.score + (edge.to.id !== edge.from.id ? 1.5 : 0) : 0,
+      matchedWords: result.matchedWords,
+      reason: `transition "${edge.label}" connects "${edge.from.label}" to "${edge.to.label}"`,
+      kind: "transition" as const,
+    };
+  });
+  const scored = [...nodeScores, ...edgeScores].sort((left, right) => right.score - left.score || left.event.atMs - right.event.atMs);
   const best = scored[0];
   const score = best?.score && best.score > 0 ? best.score : 0;
   const event = score > 0 ? best.event : fallback;
-  const grade = score >= 8 ? "strong" : score >= 4 ? "usable" : score > 0 ? "weak" : "missing";
-  return {event, score, grade, matchedWords: score > 0 ? best.matchedWords : []};
+  return {
+    event,
+    score,
+    grade: gradeFor(score),
+    matchedWords: score > 0 ? best.matchedWords : [],
+    reason: score > 0 ? best.reason : "no graph evidence matched this beat",
+    kind: score > 0 ? best.kind : "state",
+  };
 };
 
 const assertUsableJourneyEvidence = (matches: Array<{label: string; match: EvidenceMatch}>) => {
   const missing = matches.filter(({match}) => match.grade === "weak" || match.grade === "missing");
-  if (missing.length === 0) return;
+  const distinctEvidence = new Set(matches.map(({match}) => match.event.id));
+  const ordered = matches.every(({match}, index) => index === 0 || match.event.atMs >= matches[index - 1].match.event.atMs - 1_000);
+  const thinStory = distinctEvidence.size < Math.min(3, matches.length);
+  const orderProblem = !ordered;
+  const weakStory = [
+    ...(thinStory ? [{label: "story progression", match: matches[0].match, reason: "too many beats point to the same captured state"}] : []),
+    ...(orderProblem ? [{label: "story order", match: matches[0].match, reason: "matched evidence does not follow capture order"}] : []),
+  ];
+  if (missing.length === 0 && weakStory.length === 0) return;
+  const diagnostics = [...missing.map(({label, match}) => ({label, match, reason: match.reason})), ...weakStory]
+    .map(({label, match, reason}) => ({
+    label,
+    grade: match.grade,
+    score: Number(match.score.toFixed(2)),
+    matchedWords: match.matchedWords,
+    reason,
+  }));
   throw new PlanningError(
     `SceneGraph refused to render because the capture is missing usable evidence for: ${
-      missing.map(({label}) => label).join("; ")
+      diagnostics.map(({label}) => label).join("; ")
     }. Record those product states or remove them from the Journey Direction.`,
+    409,
+    {missing: diagnostics},
   );
 };
 
@@ -167,6 +308,7 @@ const compactEvents = (capture: CaptureManifest) => {
 };
 
 const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest): ScenePlan => {
+  const graph = buildStateGraph(capture);
   const interactions = compactEvents(capture);
   const snapshots = capture.events.filter(isSnapshotEvent).sort((left, right) => left.atMs - right.atMs);
   const evidenceEvents = [...interactions, ...snapshots].sort((left, right) => left.atMs - right.atMs);
@@ -182,7 +324,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const journeyBrief = brief.journey;
   const used = new Set<string>();
   const choose = (query: string, fallback: EvidenceEvent) => {
-    const match = evidenceFor(evidenceEvents, query, fallback, used);
+    const match = evidenceFor(graph, query, fallback, used);
     used.add(match.event.id);
     return match;
   };
@@ -216,7 +358,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       rationale: journeyBrief
         ? "Introduce the declared demo goal using matching captured product state."
         : "Introduce the live product from recorder-supplied UI state instead of a synthetic title card.",
-      observation: `The recorder captured the starting product state: ${eventLabel(startEvent)}.`,
+      observation: startMatch
+        ? `Graph evidence ${startMatch.grade}: ${startMatch.reason}.`
+        : `The recorder captured the starting product state: ${eventLabel(startEvent)}.`,
     },
     {
       role: "problem" as const,
@@ -226,7 +370,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       eventId: startEvent.id,
       zoom: 1.18,
       rationale: "Use captured product evidence to establish the before state.",
-      observation: `The before-state evidence is ${eventLabel(startEvent)}.`,
+      observation: startMatch
+        ? `Before-state evidence ${startMatch.grade}: ${startMatch.reason}.`
+        : `The before-state evidence is ${eventLabel(startEvent)}.`,
     },
     {
       role: "action" as const,
@@ -236,7 +382,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       eventId: actionEvent.id,
       zoom: 1.34,
       rationale: "Match the first requested journey beat to recorder evidence.",
-      observation: `The action beat is anchored to ${eventLabel(actionEvent)}.`,
+      observation: actionMatch
+        ? `Action evidence ${actionMatch.grade}: ${actionMatch.reason}.`
+        : `The action beat is anchored to ${eventLabel(actionEvent)}.`,
     },
     {
       role: "outcome" as const,
@@ -246,7 +394,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       eventId: outcomeEvent.id,
       zoom: 1.28,
       rationale: "Hold on the journey beat that explains what changed after the action.",
-      observation: `The outcome beat appears at ${Math.round(outcomeEvent.atMs)}ms: ${eventLabel(outcomeEvent)}.`,
+      observation: outcomeMatch
+        ? `Outcome evidence ${outcomeMatch.grade}: ${outcomeMatch.reason}.`
+        : `The outcome beat appears at ${Math.round(outcomeEvent.atMs)}ms: ${eventLabel(outcomeEvent)}.`,
     },
     {
       role: "proof" as const,
@@ -256,7 +406,9 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       eventId: proofEvent.id,
       zoom: 1.18,
       rationale: "Close the preview on explainable recorder evidence rather than a generic marketing claim.",
-      observation: `The proof beat references ${eventLabel(proofEvent)}.`,
+      observation: proofMatch
+        ? `Proof evidence ${proofMatch.grade}: ${proofMatch.reason}.`
+        : `The proof beat references ${eventLabel(proofEvent)}.`,
     },
   ];
   let startMs = 0;
@@ -429,7 +581,7 @@ app.setErrorHandler((error, request, reply) => {
     return reply.code(400).send({error: "The request does not match the SceneGraph contract"});
   }
   if (error instanceof PlanningError) {
-    return reply.code(error.statusCode).send({error: error.message});
+    return reply.code(error.statusCode).send({error: error.message, details: error.details});
   }
   request.log.error(error);
   return reply.code(500).send({error: "SceneGraph could not complete the request"});
@@ -463,6 +615,31 @@ app.get("/v1/projects/:id", async (request, reply) => {
   } catch {
     return reply.code(404).send({error: "Project not found"});
   }
+});
+
+app.get("/v1/projects/:id/analysis", async (request, reply) => {
+  const {id} = request.params as {id: string};
+  const project = await loadProject(id);
+  const capture = project.captures.at(-1);
+  if (!capture) return reply.code(409).send({error: "Record or upload a product journey first"});
+  const graph = buildStateGraph(capture);
+  return {
+    nodes: graph.nodes.map((node) => ({
+      id: node.id,
+      atMs: node.atMs,
+      label: node.label,
+      quality: Number(node.quality.toFixed(2)),
+      preview: shortSentence(node.text, 180),
+    })),
+    edges: graph.edges.map((edge) => ({
+      id: edge.id,
+      atMs: edge.event.atMs,
+      label: edge.label,
+      from: edge.from.label,
+      to: edge.to.label,
+      quality: Number(edge.quality.toFixed(2)),
+    })),
+  };
 });
 
 app.put("/v1/projects/:id/brief", async (request, reply) => {
