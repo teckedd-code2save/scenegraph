@@ -286,9 +286,7 @@ const assertUsableJourneyEvidence = (matches: Array<{label: string; match: Evide
     reason,
   }));
   throw new PlanningError(
-    `SceneGraph refused to render because the capture is missing usable evidence for: ${
-      diagnostics.map(({label}) => label).join("; ")
-    }. Record those product states or remove them from the Journey Direction.`,
+    "This walkthrough is missing a few moments needed for a complete story.",
     409,
     {missing: diagnostics},
   );

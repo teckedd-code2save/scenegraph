@@ -58,11 +58,35 @@ const resetPlayer = () => {
   const video = $("#renderVideo");
   $("#player").hidden = true;
   $("#downloadRender").hidden = true;
+  $("#guidance").hidden = true;
+  $("#guidanceList").innerHTML = "";
   $("#downloadRender").removeAttribute("href");
   $("#quality").textContent = "";
   video.pause();
   video.removeAttribute("src");
   video.load();
+};
+
+const friendlyMissingLabel = (label) => {
+  const value = String(label).replace(/^(start state|beat|success state):\s*/i, "").trim();
+  if (/story progression/i.test(value)) return "Capture separate moments for the beginning, action, and result.";
+  if (/story order/i.test(value)) return "Record the walkthrough in the same order the story should unfold.";
+  return `Show: ${value}`;
+};
+
+const showGuidance = (problem) => {
+  const missing = problem.details?.missing ?? [];
+  $("#stage").hidden = false;
+  $("#progress").hidden = true;
+  $("#stageMessage").textContent = "More capture needed";
+  $("#renderError").textContent = "";
+  $("#guidance").hidden = false;
+  $("#guidanceList").innerHTML = (missing.length ? missing : [
+    {label: "the starting problem"},
+    {label: "the action that changes the product"},
+    {label: "the final proof screen"},
+  ]).map((item) => `<li>${escape(friendlyMissingLabel(item.label))}</li>`).join("");
+  $("#notice").textContent = "Record those moments or update the direction, then generate the preview again.";
 };
 
 const waitForVideo = (video) => new Promise((resolve, reject) => {
@@ -262,8 +286,7 @@ async function requestRender(pathname, waitingMessage) {
   const response = await request(`/v1/projects/${project.id}/${pathname}`, {method: "POST"});
   if (!response.ok) {
     const problem = await response.json();
-    const missing = problem.details?.missing?.map((item) => `${item.label} (${item.grade})`).join("; ");
-    $("#notice").textContent = missing ? `${problem.error} Missing: ${missing}` : problem.error ?? "First cut could not be queued.";
+    showGuidance(problem);
     $("#generate").disabled = false;
     $("#master").disabled = false;
     return;
