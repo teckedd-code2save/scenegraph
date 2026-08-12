@@ -1,3 +1,5 @@
+import {encodePairing} from "./pairing.js";
+
 const api = globalThis.SCENEGRAPH_API ?? "http://localhost:4100";
 const roles = ["Hook", "Problem", "Product in action", "Outcome", "Proof", "Fit", "Close"];
 let project = null;
@@ -55,12 +57,25 @@ $("#brief").addEventListener("submit", async (event) => {
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
   project = await response.json();
   showProject();
-  $("#notice").textContent = "Workspace ready. Copy its ID into the recorder extension.";
+  $("#notice").textContent = "Workspace ready. Pair the recorder — or copy its project ID manually.";
 });
 
 $("#refresh").addEventListener("click", async () => {
   const response = await request(`/v1/projects/${project.id}`);
   if (response.ok) {project = await response.json(); showProject();}
+});
+
+$("#pair").addEventListener("click", async () => {
+  const pairing = encodePairing({apiUrl: api, projectId: project.id, accessToken: accessToken || undefined});
+  const notice = $("#pairNotice");
+  try {
+    await navigator.clipboard.writeText(pairing);
+    notice.hidden = false;
+    notice.textContent = "Pairing copied. Open the product tab, click the extension, then choose Pair with workspace.";
+  } catch {
+    notice.hidden = false;
+    notice.textContent = "Clipboard is unavailable here — paste the project ID above into the extension instead.";
+  }
 });
 
 $("#generate").addEventListener("click", async () => {

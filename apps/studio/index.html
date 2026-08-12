@@ -40,8 +40,14 @@
       </div>
       <div class="captureStep">
         <span id="captureStatus" class="status">Awaiting clean capture</span>
-        <div><strong>Recorder project ID</strong><code id="projectId"></code></div>
-        <p>Open the product tab, paste this ID into the SceneGraph extension, then choose <b>Record clean tab</b>. Stop and upload when complete.</p>
+        <div class="pairTarget">
+          <strong>Recorder project ID</strong><code id="projectId"></code>
+          <button id="pair" class="secondary">Pair recorder ←</button>
+        </div>
+        <div>
+          <p>Open the product tab, then in the SceneGraph extension choose <b>Pair with workspace</b> and <b>Record clean tab</b>. No typing needed. Manual fallback: paste the project ID above.</p>
+          <p id="pairNotice" class="notice" hidden></p>
+        </div>
       </div>
       <div id="stage" class="stage">
         <div class="stageMark">SG</div><p id="stageMessage">Your clean product film will appear here.</p>

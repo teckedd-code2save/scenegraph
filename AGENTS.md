@@ -55,7 +55,7 @@ docker compose up redis -d
 pnpm dev
 ```
 
-Load the unpacked extension from `apps/recorder-extension`, create a project at `http://localhost:3000`, and paste its project ID into the recorder popup.
+Load the unpacked extension from `apps/recorder-extension`, create a project at `http://localhost:3000`, then choose **Pair with workspace** in the recorder popup (the studio copies a pairing to the clipboard). Manual project-ID entry remains the fallback.
 
 ## 5. Build & Deploy
 

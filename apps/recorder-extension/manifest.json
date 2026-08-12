@@ -3,7 +3,7 @@
   "name": "SceneGraph Capture",
   "version": "0.1.0",
   "description": "Captures clean product pixels and precise interaction anchors.",
-  "permissions": ["activeTab", "scripting", "storage", "tabCapture", "offscreen"],
+  "permissions": ["activeTab", "scripting", "storage", "tabCapture", "offscreen", "clipboardRead"],
   "host_permissions": ["<all_urls>"],
   "background": {"service_worker": "dist/background.js", "type": "module"},
   "action": {

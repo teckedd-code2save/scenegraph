@@ -1,3 +1,5 @@
+import {parsePairing} from "./pairing.js";
+
 const api = document.querySelector<HTMLInputElement>("#api")!;
 const project = document.querySelector<HTMLInputElement>("#project")!;
 const token = document.querySelector<HTMLInputElement>("#token")!;
@@ -12,6 +14,23 @@ chrome.storage.local.get(["scenegraphRecorderSettings", "scenegraphRecorderState
   if (saved?.projectId) project.value = saved.projectId;
   if (saved?.accessToken) token.value = saved.accessToken;
   if (stored.scenegraphRecorderState) show(String(stored.scenegraphRecorderState));
+});
+
+document.querySelector("#pair")!.addEventListener("click", async () => {
+  let text: string;
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    show("Clipboard is unavailable. Set up the fields manually below.");
+    return;
+  }
+  const result = parsePairing(text);
+  if (!result.ok) { show(result.error); return; }
+  api.value = result.pairing.apiUrl;
+  project.value = result.pairing.projectId;
+  if (result.pairing.accessToken) token.value = result.pairing.accessToken;
+  await chrome.storage.local.set({scenegraphRecorderSettings: settings()});
+  show(`Paired with ${result.pairing.projectId}. Choose Record clean tab.`);
 });
 
 document.querySelector("#start")!.addEventListener("click", async () => {

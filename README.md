@@ -18,7 +18,7 @@ A user supplies a product brief and records one authentic journey. SceneGraph re
 
 ## Current maturity
 
-- **Early access:** fresh workspaces, token-protected clean tab capture, exact DOM anchors, sensitive-field masking, signed capture/render assets, persistent Docker volumes, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, server-side H.264 composition, render status, playback and download.
+- **Early access:** fresh workspaces, one-click recorder pairing, token-protected clean tab capture, exact DOM anchors, sensitive-field masking, signed capture/render assets, persistent Docker volumes, deterministic seven-beat planning, camera targeting, editorial cards, subtle click treatment, Redis render queue, server-side H.264 composition, render status, playback and download.
 - **In progress:** multi-user identity, database/object-storage persistence and recorded voice revisions.
 - **Product direction:** GitHub-triggered feature films.
 
@@ -35,7 +35,7 @@ docker compose up redis -d
 pnpm dev
 ```
 
-Load the unpacked extension from `apps/recorder-extension`, create a project at `http://localhost:3000`, and paste its project ID into the recorder popup.
+Load the unpacked extension from `apps/recorder-extension`, create a project at `http://localhost:3000`, then choose **Pair with workspace** in the recorder popup — the studio copies a pairing to the clipboard, so no project ID needs typing. Manual project-ID entry still works as a fallback.
 
 ## GroundControl deployment
 

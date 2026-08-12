@@ -8,10 +8,14 @@
     input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #cfd2cb;border-radius:7px;background:white}
     button{width:100%;padding:11px;border:0;border-radius:7px;background:#168fe1;color:white;font-weight:650;cursor:pointer}
     button.stop{background:#242724;margin-top:8px}.status{min-height:20px;margin-top:12px;color:#565b54}
+    .or{display:flex;align-items:center;gap:10px;margin:14px 0;color:#8a8f86;font-size:11px;letter-spacing:.08em;text-transform:uppercase}.or:before,.or:after{content:"";flex:1;height:1px;background:#dfe1db}
   </style>
 </head>
 <body>
   <h1>SceneGraph Capture</h1>
+  <button id="pair">Pair with workspace ←</button>
+  <div class="status">Copy a pairing in the studio, then click here.</div>
+  <div class="or"><span>or set up manually</span></div>
   <div class="field"><label for="api">Studio API</label><input id="api" value="http://localhost:4100"></div>
   <div class="field"><label for="token">Access token</label><input id="token" type="password" autocomplete="off" placeholder="Your deployment token"></div>
   <div class="field"><label for="project">Project ID</label><input id="project" placeholder="Paste from your workspace"></div>
