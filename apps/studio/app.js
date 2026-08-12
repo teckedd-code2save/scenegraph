@@ -170,6 +170,7 @@ const showProject = () => {
   $("#projectLabel").innerHTML = `${escape(project.brief.productName)}<span>Product workspace</span>`;
   $("#promise").textContent = project.brief.launchPromise;
   $("#projectId").textContent = project.id;
+  $("#assistedCommand").textContent = `SCENEGRAPH_PROJECT_ID=${project.id} SCENEGRAPH_TARGET_URL=${project.brief.productUrl} pnpm capture:assisted`;
   const ready = project.captures.length > 0;
   $("#captureStatus").textContent = ready ? "Capture ready" : "Awaiting clean capture";
   $("#captureStatus").className = ready ? "status ready" : "status";

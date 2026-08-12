@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "build": "pnpm -r build",
+    "capture:assisted": "pnpm --filter @scenegraph/capture-agent dev",
     "dev": "pnpm --parallel --filter @scenegraph/studio --filter @scenegraph/director --filter @scenegraph/render-worker dev",
     "lint": "pnpm prepare:shared && pnpm -r lint",
     "prepare:shared": "pnpm --filter @scenegraph/contracts --filter @scenegraph/media-store build",
