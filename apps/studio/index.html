@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>SceneGraph</title>
   <meta name="description" content="Direct real product journeys into launch films.">
+  <meta name="scenegraph-studio" content="capture-bridge">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -50,14 +51,17 @@
       <div class="captureStep">
         <span id="captureStatus" class="status">Awaiting clean capture</span>
         <div><strong>Recorder project ID</strong><code id="projectId"></code></div>
-        <p>Open the product tab, paste this ID into the SceneGraph extension, then choose <b>Record clean tab</b>. Stop and upload when complete.</p>
+        <p id="captureCopy">Connect the extension to this workspace, open the product tab, then record the product journey.</p>
       </div>
-      <div class="assisted">
+      <div class="extensionConnect">
         <div>
-          <strong>Assisted capture</strong>
-          <p>Use an authenticated Chrome tab through DevTools when the extension flow gets in the way.</p>
+          <strong>Browser capture</strong>
+          <p id="extensionStatus">Pair the extension so it knows this workspace, the Studio API, and the product URL.</p>
         </div>
-        <code id="assistedCommand"></code>
+        <div class="captureActions">
+          <button id="pairExtension" class="secondary" type="button">Connect extension</button>
+          <button id="openProduct" type="button">Open product tab →</button>
+        </div>
       </div>
       <form id="journey" class="journey">
         <label class="wide">Demo goal<textarea name="goal" required minlength="12"></textarea></label>

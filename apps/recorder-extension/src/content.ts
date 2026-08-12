@@ -1,5 +1,8 @@
 const state = {active: false, startedAt: 0};
 let snapshotTimer = 0;
+const bridgeMessages = new Set(["SCENEGRAPH_CONFIGURE_EXTENSION", "SCENEGRAPH_EXTENSION_STATUS"]);
+const isStudioBridgePage = () =>
+  Boolean(document.querySelector('meta[name="scenegraph-studio"][content="capture-bridge"]'));
 
 const selectorFor = (element: Element): string => {
   const testId = element.getAttribute("data-testid");
@@ -132,6 +135,29 @@ history.replaceState = function replaceState(...args) {
   routeChanged();
 };
 window.addEventListener("popstate", routeChanged);
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window || !event.data || typeof event.data !== "object") return;
+  if (!bridgeMessages.has(event.data.type)) return;
+  if (!isStudioBridgePage()) return;
+
+  const reply = (payload: Record<string, unknown>) => {
+    window.postMessage({type: "SCENEGRAPH_EXTENSION_RESPONSE", ...payload}, event.origin || "*");
+  };
+
+  if (event.data.type === "SCENEGRAPH_CONFIGURE_EXTENSION") {
+    chrome.runtime.sendMessage({
+      target: "background",
+      type: "CONFIGURE_RECORDER",
+      settings: event.data.settings,
+    }).then((response) => reply(response)).catch((error) => reply({ok: false, error: error.message}));
+    return;
+  }
+
+  chrome.runtime.sendMessage({target: "background", type: "RECORDER_STATUS"})
+    .then((response) => reply(response))
+    .catch((error) => reply({ok: false, error: error.message}));
+});
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SCENEGRAPH_PING") {

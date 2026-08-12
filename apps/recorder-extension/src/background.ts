@@ -1,4 +1,4 @@
-type RecorderSettings = {apiUrl: string; projectId: string; accessToken: string};
+type RecorderSettings = {apiUrl: string; projectId: string; accessToken: string; targetUrl?: string; productName?: string};
 type CaptureSession = {
   tabId: number;
   sourceUrl: string;
@@ -10,6 +10,30 @@ type CaptureSession = {
 };
 
 let current: CaptureSession | null = null;
+
+const readSettings = async () => {
+  const stored = await chrome.storage.local.get(["scenegraphRecorderSettings", "scenegraphRecorderState"]);
+  return {
+    settings: stored.scenegraphRecorderSettings as Partial<RecorderSettings> | undefined,
+    state: String(stored.scenegraphRecorderState ?? "idle"),
+    recording: Boolean(current),
+  };
+};
+
+const saveSettings = async (settings: Partial<RecorderSettings>) => {
+  const existing = (await readSettings()).settings ?? {};
+  const next = {
+    ...existing,
+    ...settings,
+    apiUrl: settings.apiUrl?.replace(/\/$/, "") ?? existing.apiUrl ?? "http://localhost:4100",
+    accessToken: settings.accessToken ?? existing.accessToken ?? "",
+  };
+  await chrome.storage.local.set({scenegraphRecorderSettings: next, scenegraphRecorderState: "paired"});
+  await chrome.action.setBadgeBackgroundColor({color: "#168fe1"});
+  await chrome.action.setBadgeText({text: "SET"});
+  setTimeout(() => chrome.action.setBadgeText({text: current ? "REC" : ""}), 1600);
+  return next;
+};
 
 const ensureOffscreen = async () => {
   const exists = await chrome.offscreen.hasDocument();
@@ -98,6 +122,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.target === "background" && message.type === "STOP_CAPTURE") {
     stopCapture(message.settings).then(sendResponse).catch((error) => sendResponse({ok: false, error: error.message}));
+    return true;
+  }
+  if (message.target === "background" && message.type === "CONFIGURE_RECORDER") {
+    saveSettings(message.settings ?? {})
+      .then((settings) => sendResponse({ok: true, projectId: settings.projectId, productName: settings.productName}))
+      .catch((error) => sendResponse({ok: false, error: error.message}));
+    return true;
+  }
+  if (message.target === "background" && message.type === "RECORDER_STATUS") {
+    readSettings()
+      .then(({settings, state, recording}) => sendResponse({
+        ok: true,
+        state,
+        recording,
+        configured: Boolean(settings?.apiUrl && settings?.projectId),
+        projectId: settings?.projectId,
+        productName: settings?.productName,
+        targetUrl: settings?.targetUrl,
+      }))
+      .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;
   }
 });

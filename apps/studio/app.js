@@ -54,6 +54,32 @@ const setJourneyForm = () => {
   form.elements.avoid.value = journey.avoid ?? "";
 };
 
+const extensionSettings = () => ({
+  apiUrl: api,
+  accessToken,
+  projectId: project.id,
+  productName: project.brief.productName,
+  targetUrl: project.brief.productUrl,
+});
+
+const requestExtensionStatus = () => {
+  window.postMessage({type: "SCENEGRAPH_EXTENSION_STATUS"}, location.origin);
+};
+
+const pairExtension = () => {
+  if (!project) return;
+  accessToken = $("#accessToken").value.trim();
+  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
+  else localStorage.removeItem("scenegraphAccessToken");
+  $("#extensionStatus").textContent = "Waiting for the extension to confirm this workspace...";
+  window.postMessage({type: "SCENEGRAPH_CONFIGURE_EXTENSION", settings: extensionSettings()}, location.origin);
+  setTimeout(() => {
+    if ($("#extensionStatus").textContent.includes("Waiting")) {
+      $("#extensionStatus").textContent = "No extension response yet. Reload SceneGraph Capture from chrome://extensions, then choose Connect extension again.";
+    }
+  }, 1800);
+};
+
 const resetPlayer = () => {
   const video = $("#renderVideo");
   $("#player").hidden = true;
@@ -170,13 +196,17 @@ const showProject = () => {
   $("#projectLabel").innerHTML = `${escape(project.brief.productName)}<span>Product workspace</span>`;
   $("#promise").textContent = project.brief.launchPromise;
   $("#projectId").textContent = project.id;
-  $("#assistedCommand").textContent = `SCENEGRAPH_PROJECT_ID=${project.id} SCENEGRAPH_TARGET_URL=${project.brief.productUrl} pnpm capture:assisted`;
   const ready = project.captures.length > 0;
   $("#captureStatus").textContent = ready ? "Capture ready" : "Awaiting clean capture";
   $("#captureStatus").className = ready ? "status ready" : "status";
+  $("#captureCopy").textContent = ready
+    ? "Capture evidence is available. Record another pass any time the story needs stronger product proof."
+    : "Connect the extension to this workspace, open the product tab, then record the product journey.";
+  $("#extensionStatus").textContent = "Pair the extension so it knows this workspace, the Studio API, and the product URL.";
   $("#generate").disabled = !ready;
   setJourneyForm();
   timeline(project.plans.at(-1)?.scenes);
+  requestExtensionStatus();
 };
 
 const showCreate = () => {
@@ -250,7 +280,7 @@ $("#brief").addEventListener("submit", async (event) => {
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
   project = await response.json();
   showProject();
-  $("#notice").textContent = "Workspace ready. Copy its ID into the recorder extension.";
+  $("#notice").textContent = "Workspace ready. Connect the browser extension, then record the product tab.";
 });
 
 $("#refresh").addEventListener("click", async () => {
@@ -259,6 +289,33 @@ $("#refresh").addEventListener("click", async () => {
 });
 
 $("#newWorkspace").addEventListener("click", showCreate);
+$("#pairExtension").addEventListener("click", pairExtension);
+$("#openProduct").addEventListener("click", () => {
+  if (!project?.brief.productUrl) return;
+  window.open(project.brief.productUrl, "_blank", "noopener");
+});
+
+window.addEventListener("message", (event) => {
+  if (event.source !== window || !event.data || event.data.type !== "SCENEGRAPH_EXTENSION_RESPONSE") return;
+  if (!project) return;
+  if (!event.data.ok) {
+    $("#extensionStatus").textContent = event.data.error || "The extension could not be reached. Reload it from chrome://extensions.";
+    return;
+  }
+  if (event.data.configured && event.data.projectId === project.id) {
+    $("#extensionStatus").textContent = event.data.recording
+      ? "Extension is recording this workspace. Stop and upload from the product tab when complete."
+      : "Extension connected. Open the product tab, click SceneGraph Capture, then record.";
+    return;
+  }
+  if (event.data.projectId === project.id) {
+    $("#extensionStatus").textContent = "Extension connected. Open the product tab, click SceneGraph Capture, then record.";
+    return;
+  }
+  if (event.data.projectId) {
+    $("#extensionStatus").textContent = "Extension is paired to another workspace. Choose Connect extension to switch it here.";
+  }
+});
 
 $("#journey").addEventListener("submit", async (event) => {
   event.preventDefault();
