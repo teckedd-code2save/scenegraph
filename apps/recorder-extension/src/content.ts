@@ -3,6 +3,7 @@ let snapshotTimer = 0;
 const bridgeMessages = new Set(["SCENEGRAPH_CONFIGURE_EXTENSION", "SCENEGRAPH_EXTENSION_STATUS"]);
 const isStudioBridgePage = () =>
   Boolean(document.querySelector('meta[name="scenegraph-studio"][content="capture-bridge"]'));
+let captureBar: HTMLDivElement | null = null;
 
 const selectorFor = (element: Element): string => {
   const testId = element.getAttribute("data-testid");
@@ -63,6 +64,71 @@ const emit = (payload: Record<string, unknown>) => {
     type: "SCENEGRAPH_EVENT",
     event: {id: crypto.randomUUID(), atMs: performance.now() - state.startedAt, ...payload},
   });
+};
+
+const showCaptureBar = () => {
+  if (captureBar) return;
+  captureBar = document.createElement("div");
+  captureBar.id = "scenegraph-capture-bar";
+  captureBar.style.cssText = [
+    "position:fixed",
+    "left:50%",
+    "bottom:18px",
+    "transform:translateX(-50%)",
+    "z-index:2147483647",
+    "display:flex",
+    "align-items:center",
+    "gap:12px",
+    "padding:10px 12px",
+    "border:1px solid rgba(255,255,255,.16)",
+    "border-radius:8px",
+    "background:#111411",
+    "color:#f6f7f2",
+    "font:13px Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",
+    "box-shadow:0 12px 34px rgba(0,0,0,.32)",
+  ].join(";");
+  const label = document.createElement("span");
+  label.textContent = "SceneGraph recording";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Stop & upload";
+  button.style.cssText = [
+    "border:0",
+    "border-radius:6px",
+    "background:#168fe1",
+    "color:#fff",
+    "font:inherit",
+    "font-weight:650",
+    "padding:8px 11px",
+    "cursor:pointer",
+  ].join(";");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    button.textContent = "Uploading...";
+    const response = await chrome.runtime.sendMessage({target: "background", type: "STOP_ACTIVE_CAPTURE"})
+      .catch((error) => ({ok: false, error: error.message}));
+    if (response.ok) {
+      label.textContent = "Capture uploaded";
+      button.textContent = "Done";
+      setTimeout(hideCaptureBar, 1200);
+      return;
+    }
+    label.textContent = response.error || "Upload failed";
+    button.disabled = false;
+    button.textContent = "Try upload again";
+  });
+  captureBar.append(label, button);
+  document.documentElement.append(captureBar);
+};
+
+const hideCaptureBar = () => {
+  captureBar?.remove();
+  captureBar = null;
+};
+
+const setCaptureBarStatus = (message: string) => {
+  const label = captureBar?.querySelector("span");
+  if (label) label.textContent = message;
 };
 
 const snapshot = () => {
@@ -167,7 +233,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SCENEGRAPH_START") {
     state.active = true;
     state.startedAt = performance.now();
+    showCaptureBar();
     emit({kind: "navigation", url: location.href});
     snapshot();
-  } else if (message.type === "SCENEGRAPH_STOP") state.active = false;
+  } else if (message.type === "SCENEGRAPH_STOP") {
+    state.active = false;
+    setCaptureBarStatus("Uploading capture");
+  } else if (message.type === "SCENEGRAPH_CAPTURE_DONE") {
+    state.active = false;
+    setCaptureBarStatus(message.ok ? "Capture uploaded" : message.error || "Upload failed");
+    if (message.ok) setTimeout(hideCaptureBar, 1200);
+  }
 });

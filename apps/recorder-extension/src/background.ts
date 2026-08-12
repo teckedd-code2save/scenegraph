@@ -1,4 +1,11 @@
-type RecorderSettings = {apiUrl: string; projectId: string; accessToken: string; targetUrl?: string; productName?: string};
+type RecorderSettings = {
+  apiUrl: string;
+  projectId: string;
+  accessToken: string;
+  targetUrl?: string;
+  productName?: string;
+  studioUrl?: string;
+};
 type CaptureSession = {
   tabId: number;
   sourceUrl: string;
@@ -35,6 +42,30 @@ const saveSettings = async (settings: Partial<RecorderSettings>) => {
   return next;
 };
 
+const requireSettings = async () => {
+  const settings = (await readSettings()).settings;
+  if (!settings?.apiUrl || !settings.projectId) throw new Error("Pair SceneGraph Capture from Studio first.");
+  return {
+    ...settings,
+    apiUrl: settings.apiUrl,
+    projectId: settings.projectId,
+    accessToken: settings.accessToken ?? "",
+  };
+};
+
+const focusStudio = async (settings: Partial<RecorderSettings>) => {
+  if (!settings.studioUrl) return;
+  const studio = new URL(settings.studioUrl);
+  const tabs = await chrome.tabs.query({url: `${studio.origin}/*`}).catch(() => []);
+  const tab = tabs.find((candidate) => candidate.id);
+  if (tab?.id) {
+    await chrome.tabs.update(tab.id, {active: true, url: settings.studioUrl});
+    if (tab.windowId) await chrome.windows.update(tab.windowId, {focused: true});
+    return;
+  }
+  await chrome.tabs.create({url: settings.studioUrl});
+};
+
 const ensureOffscreen = async () => {
   const exists = await chrome.offscreen.hasDocument();
   if (!exists) {
@@ -62,6 +93,8 @@ const ensureTabRecorder = async (tabId: number) => {
 };
 
 const startCapture = async (settings: RecorderSettings) => {
+  const saved = await saveSettings(settings);
+  const merged = {...saved, ...settings};
   const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
   if (!tab.id || !tab.url) throw new Error("Select the product tab first");
   await ensureOffscreen();
@@ -84,19 +117,21 @@ const startCapture = async (settings: RecorderSettings) => {
   await chrome.runtime.sendMessage({target: "offscreen", type: "START_RECORDING", streamId});
   await chrome.action.setBadgeBackgroundColor({color: "#E14F3D"});
   await chrome.action.setBadgeText({text: "REC"});
-  await chrome.storage.local.set({scenegraphRecorderSettings: settings, scenegraphRecorderState: "recording"});
+  await chrome.storage.local.set({scenegraphRecorderSettings: merged, scenegraphRecorderState: "recording"});
 };
 
-const stopCapture = async (settings: RecorderSettings) => {
+const stopCapture = async (settings: Partial<RecorderSettings>) => {
   if (!current) throw new Error("No recording is active");
-  await chrome.tabs.sendMessage(current.tabId, {type: "SCENEGRAPH_STOP"}).catch(() => undefined);
+  const merged = {...(await requireSettings()), ...settings};
+  const tabId = current.tabId;
+  await chrome.tabs.sendMessage(tabId, {type: "SCENEGRAPH_STOP"}).catch(() => undefined);
   await chrome.action.setBadgeText({text: "UP"});
   const result = await chrome.runtime.sendMessage({
     target: "offscreen",
     type: "STOP_RECORDING",
-    apiUrl: settings.apiUrl.replace(/\/$/, ""),
-    projectId: settings.projectId,
-    accessToken: settings.accessToken,
+    apiUrl: merged.apiUrl.replace(/\/$/, ""),
+    projectId: merged.projectId,
+    accessToken: merged.accessToken,
     captureId: crypto.randomUUID(),
     sourceUrl: current.sourceUrl,
     startedAt: current.startedAt,
@@ -107,7 +142,9 @@ const stopCapture = async (settings: RecorderSettings) => {
   current = null;
   await chrome.action.setBadgeText({text: ""});
   await chrome.storage.local.set({scenegraphRecorderState: result.ok ? "uploaded" : "failed"});
+  await chrome.tabs.sendMessage(tabId, {type: "SCENEGRAPH_CAPTURE_DONE", ok: result.ok, error: result.error}).catch(() => undefined);
   if (!result.ok) throw new Error(result.error);
+  await focusStudio(merged).catch(() => undefined);
   return result;
 };
 
@@ -122,6 +159,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.target === "background" && message.type === "STOP_CAPTURE") {
     stopCapture(message.settings).then(sendResponse).catch((error) => sendResponse({ok: false, error: error.message}));
+    return true;
+  }
+  if (message.target === "background" && message.type === "STOP_ACTIVE_CAPTURE") {
+    requireSettings()
+      .then((settings) => stopCapture(settings))
+      .then(sendResponse)
+      .catch((error) => sendResponse({ok: false, error: error.message}));
     return true;
   }
   if (message.target === "background" && message.type === "CONFIGURE_RECORDER") {

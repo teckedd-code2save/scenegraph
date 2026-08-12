@@ -3,6 +3,7 @@ const roles = ["Hook", "Problem", "Product in action", "Outcome", "Proof", "Fit"
 let project = null;
 let render = null;
 let poll = null;
+let capturePoll = null;
 const $ = (selector) => document.querySelector(selector);
 let accessToken = localStorage.getItem("scenegraphAccessToken") ?? "";
 $("#accessToken").value = accessToken;
@@ -60,6 +61,7 @@ const extensionSettings = () => ({
   projectId: project.id,
   productName: project.brief.productName,
   targetUrl: project.brief.productUrl,
+  studioUrl: location.href,
 });
 
 const requestExtensionStatus = () => {
@@ -189,6 +191,7 @@ async function showPlayableRender() {
 }
 
 const showProject = () => {
+  clearInterval(capturePoll);
   localStorage.setItem("scenegraphActiveProjectId", project.id);
   $("#create").hidden = true;
   $("#workspace").hidden = false;
@@ -201,16 +204,18 @@ const showProject = () => {
   $("#captureStatus").className = ready ? "status ready" : "status";
   $("#captureCopy").textContent = ready
     ? "Capture evidence is available. Record another pass any time the story needs stronger product proof."
-    : "Connect the extension to this workspace, open the product tab, then record the product journey.";
+    : "Connect the extension to this workspace, open the product tab, then let SceneGraph collect the journey evidence.";
   $("#extensionStatus").textContent = "Pair the extension so it knows this workspace, the Studio API, and the product URL.";
   $("#generate").disabled = !ready;
   setJourneyForm();
   timeline(project.plans.at(-1)?.scenes);
   requestExtensionStatus();
+  if (!ready) capturePoll = setInterval(checkCapture, 2500);
 };
 
 const showCreate = () => {
   clearInterval(poll);
+  clearInterval(capturePoll);
   localStorage.removeItem("scenegraphActiveProjectId");
   project = null;
   render = null;
@@ -288,6 +293,18 @@ $("#refresh").addEventListener("click", async () => {
   if (response.ok) {project = await response.json(); showProject();}
 });
 
+async function checkCapture() {
+  if (!project) return;
+  const previousCount = project.captures.length;
+  const response = await request(`/v1/projects/${project.id}`).catch(() => null);
+  if (!response?.ok) return;
+  const latest = await response.json();
+  if (latest.captures.length <= previousCount) return;
+  project = latest;
+  showProject();
+  $("#notice").textContent = "Capture uploaded. SceneGraph has fresh product evidence.";
+}
+
 $("#newWorkspace").addEventListener("click", showCreate);
 $("#pairExtension").addEventListener("click", pairExtension);
 $("#openProduct").addEventListener("click", () => {
@@ -304,12 +321,12 @@ window.addEventListener("message", (event) => {
   }
   if (event.data.configured && event.data.projectId === project.id) {
     $("#extensionStatus").textContent = event.data.recording
-      ? "Extension is recording this workspace. Stop and upload from the product tab when complete."
-      : "Extension connected. Open the product tab, click SceneGraph Capture, then record.";
+      ? "Extension is recording this workspace. Stop from the SceneGraph bar on the product page when complete."
+      : "Extension connected. Open the product tab, click SceneGraph Capture once, then use the in-page SceneGraph bar.";
     return;
   }
   if (event.data.projectId === project.id) {
-    $("#extensionStatus").textContent = "Extension connected. Open the product tab, click SceneGraph Capture, then record.";
+    $("#extensionStatus").textContent = "Extension connected. Open the product tab, click SceneGraph Capture once, then use the in-page SceneGraph bar.";
     return;
   }
   if (event.data.projectId) {

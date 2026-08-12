@@ -33,7 +33,7 @@ chrome.storage.local.get(["scenegraphRecorderSettings", "scenegraphRecorderState
 const labelForState = (state: string) => {
   if (state === "paired") return "Extension paired. Open the product tab and start recording.";
   if (state === "recording") return "Recording. Walk through the product, then stop.";
-  if (state === "uploaded") return "Capture uploaded. Return to Studio and refresh.";
+  if (state === "uploaded") return "Capture uploaded. Studio will pick it up.";
   if (state === "failed") return "Upload failed. Check the connection and try again.";
   return state;
 };
