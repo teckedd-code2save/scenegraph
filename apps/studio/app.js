@@ -120,8 +120,8 @@ const showGuidance = (problem) => {
 const waitForVideo = (video) => new Promise((resolve, reject) => {
   const timeout = setTimeout(() => {
     cleanup();
-    reject(new Error("The video file did not become playable."));
-  }, 12_000);
+    reject(new Error("The MP4 is ready, but the browser has not reported playback metadata yet."));
+  }, 45_000);
   const cleanup = () => {
     clearTimeout(timeout);
     video.removeEventListener("loadedmetadata", handleReady);
@@ -159,22 +159,25 @@ async function showPlayableRender() {
 
   const video = $("#renderVideo");
   const download = $("#downloadRender");
+  const playableUrl = `${render.downloadUrl}${render.downloadUrl.includes("?") ? "&" : "?"}ready=${Date.now()}`;
   $("#stageMessage").textContent = "Preparing playback";
   $("#renderError").textContent = "";
-  download.hidden = true;
-  download.href = render.downloadUrl;
+  download.href = playableUrl;
   $("#quality").textContent = render.profile === "master" ? "Master · 1080p · 60 fps" : "Preview · 720p · 30 fps";
+  $("#player").hidden = false;
+  download.hidden = false;
+  video.preload = "metadata";
 
   try {
     const ready = waitForVideo(video);
-    video.src = render.downloadUrl;
+    video.src = playableUrl;
+    video.load();
     await ready;
   } catch (error) {
     $("#progress").hidden = true;
     $("#stage").hidden = false;
-    $("#player").hidden = true;
     $("#stageMessage").textContent = "Render completed";
-    $("#renderError").textContent = error.message;
+    $("#renderError").textContent = `${error.message} You can still use the player controls or download the MP4.`;
     $("#master").disabled = false;
     $("#generate").disabled = false;
     return;
@@ -182,8 +185,6 @@ async function showPlayableRender() {
 
   $("#progress").hidden = true;
   $("#stage").hidden = true;
-  $("#player").hidden = false;
-  download.hidden = false;
   $("#master").hidden = render.profile === "master";
   $("#master").disabled = false;
   $("#generate").disabled = false;

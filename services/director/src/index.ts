@@ -1,7 +1,7 @@
 import path from "node:path";
 import {createHmac, timingSafeEqual} from "node:crypto";
 import {createWriteStream} from "node:fs";
-import {mkdir, readFile, rename, writeFile} from "node:fs/promises";
+import {mkdir, readFile, rename, stat, writeFile} from "node:fs/promises";
 import {pipeline} from "node:stream/promises";
 import type {Readable} from "node:stream";
 import Fastify from "fastify";
@@ -736,9 +736,12 @@ app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
   if (!job) return reply.code(404).send({error: "Render job expired"});
   const state = await job.getState();
   const result = job.returnvalue ? renderResultSchema.parse(job.returnvalue) : undefined;
+  const localOutputReady = result?.outputLocation
+    ? await stat(result.outputLocation).then((file) => file.size > 0).catch(() => false)
+    : false;
   const downloadUrl = result?.outputKey && objectStore
     ? await objectStore.signedGetUrl(result.outputKey)
-    : result?.outputLocation
+    : result?.outputLocation && localOutputReady
       ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
       : undefined;
   return {
