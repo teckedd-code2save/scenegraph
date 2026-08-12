@@ -214,6 +214,22 @@ const showProject = () => {
   if (!ready) capturePoll = setInterval(checkCapture, 2500);
 };
 
+const restoreLatestRender = async () => {
+  if (!project?.renders?.length) {
+    resetPlayer();
+    return;
+  }
+  const latest = [...project.renders].reverse().find((item) => item.downloadUrl && item.state === "completed");
+  if (!latest) {
+    resetPlayer();
+    return;
+  }
+  render = latest;
+  $("#stageMessage").textContent = "Restoring latest render";
+  $("#stage").hidden = false;
+  await showPlayableRender();
+};
+
 const showCreate = () => {
   clearInterval(poll);
   clearInterval(capturePoll);
@@ -242,6 +258,7 @@ const loadProject = async (id, quiet = false) => {
   }
   project = await response.json();
   showProject();
+  await restoreLatestRender();
   $("#notice").textContent = "Workspace restored.";
   return true;
 };
@@ -291,7 +308,7 @@ $("#brief").addEventListener("submit", async (event) => {
 
 $("#refresh").addEventListener("click", async () => {
   const response = await request(`/v1/projects/${project.id}`);
-  if (response.ok) {project = await response.json(); showProject();}
+  if (response.ok) {project = await response.json(); showProject(); await restoreLatestRender();}
 });
 
 async function checkCapture() {
@@ -303,6 +320,7 @@ async function checkCapture() {
   if (latest.captures.length <= previousCount) return;
   project = latest;
   showProject();
+  await restoreLatestRender();
   $("#notice").textContent = "Capture uploaded. SceneGraph has fresh product evidence.";
 }
 
@@ -390,6 +408,8 @@ async function checkRender() {
   if (render.downloadUrl) {
     clearInterval(poll);
     await showPlayableRender();
+    const response = await request(`/v1/projects/${project.id}`).catch(() => null);
+    if (response?.ok) project = await response.json();
   }
   if (render.state === "failed") {
     clearInterval(poll); $("#progress").hidden = true;

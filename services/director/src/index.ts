@@ -517,6 +517,32 @@ const captureUrl = async (
   ? objectStore.signedGetUrl(capture.assetKey, 12 * 60 * 60)
   : capture.videoUrl;
 
+const renderStatus = async (
+  request: {protocol: string; host: string},
+  jobId: string,
+) => {
+  const job = await queue.getJob(jobId);
+  if (!job) return {jobId, state: "expired" as const};
+  const state = await job.getState();
+  const result = job.returnvalue ? renderResultSchema.parse(job.returnvalue) : undefined;
+  const localOutputReady = result?.outputLocation
+    ? await stat(result.outputLocation).then((file) => file.size > 0).catch(() => false)
+    : false;
+  const downloadUrl = result?.outputKey && objectStore
+    ? await objectStore.signedGetUrl(result.outputKey)
+    : result?.outputLocation && localOutputReady
+      ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
+      : undefined;
+  return {
+    jobId,
+    state,
+    progress: job.progress,
+    error: job.failedReason || undefined,
+    profile: result?.profile,
+    downloadUrl,
+  };
+};
+
 app.addHook("onRequest", async (request, reply) => {
   const pathname = request.url.split("?", 1)[0];
   if (pathname.startsWith("/v1/")) {
@@ -609,7 +635,9 @@ app.post("/v1/projects", async (request, reply) => {
 app.get("/v1/projects/:id", async (request, reply) => {
   const {id} = request.params as {id: string};
   try {
-    return await loadProject(id);
+    const project = await loadProject(id);
+    const renders = await Promise.all(project.renderJobIds.slice(-10).map((jobId) => renderStatus(request, jobId)));
+    return {...project, renders};
   } catch {
     return reply.code(404).send({error: "Project not found"});
   }
@@ -732,26 +760,9 @@ app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
   const {id, jobId} = request.params as {id: string; jobId: string};
   const project = await loadProject(id);
   if (!project.renderJobIds.includes(jobId)) return reply.code(404).send({error: "Render not found"});
-  const job = await queue.getJob(jobId);
-  if (!job) return reply.code(404).send({error: "Render job expired"});
-  const state = await job.getState();
-  const result = job.returnvalue ? renderResultSchema.parse(job.returnvalue) : undefined;
-  const localOutputReady = result?.outputLocation
-    ? await stat(result.outputLocation).then((file) => file.size > 0).catch(() => false)
-    : false;
-  const downloadUrl = result?.outputKey && objectStore
-    ? await objectStore.signedGetUrl(result.outputKey)
-    : result?.outputLocation && localOutputReady
-      ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
-      : undefined;
-  return {
-    jobId,
-    state,
-    progress: job.progress,
-    error: job.failedReason || undefined,
-    profile: result?.profile,
-    downloadUrl,
-  };
+  const status = await renderStatus(request, jobId);
+  if (status.state === "expired") return reply.code(404).send({error: "Render job expired"});
+  return status;
 });
 app.post("/v1/plan", async (request, reply) => {
   const body = request.body as Record<string, unknown>;
