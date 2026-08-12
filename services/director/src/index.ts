@@ -61,6 +61,21 @@ type SnapshotEvent = EvidenceEvent & {
     text?: string;
   }>;
 };
+type EvidenceMatch = {
+  event: EvidenceEvent;
+  score: number;
+  grade: "strong" | "usable" | "weak" | "missing";
+  matchedWords: string[];
+};
+
+class PlanningError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode = 409) {
+    super(message);
+    this.name = "PlanningError";
+    this.statusCode = statusCode;
+  }
+}
 
 const isInteractionEvent = (event: CaptureEvent): event is EvidenceEvent & {rect: Rect} =>
   ["click", "focus", "input"].includes(String(event.kind)) && Boolean(event.rect);
@@ -102,7 +117,7 @@ const evidenceFor = (
   query: string,
   fallback: EvidenceEvent,
   usedIds = new Set<string>(),
-) => {
+): EvidenceMatch => {
   const words = wordsFor(query);
   const phrase = query.toLowerCase().trim();
   const scored = events.map((event) => {
@@ -118,9 +133,24 @@ const evidenceFor = (
     const specificity = isSnapshotEvent(event) ? 0 : 1.25;
     const reusePenalty = usedIds.has(event.id) ? 5 : 0;
     const score = directScore + snapshotScore + phraseScore + specificity - reusePenalty;
-    return {event, score};
+    const matchedWords = words.filter((word) => fullText.includes(word));
+    return {event, score, matchedWords};
   }).sort((left, right) => right.score - left.score || left.event.atMs - right.event.atMs);
-  return scored[0]?.score > 0 ? scored[0].event : fallback;
+  const best = scored[0];
+  const score = best?.score && best.score > 0 ? best.score : 0;
+  const event = score > 0 ? best.event : fallback;
+  const grade = score >= 8 ? "strong" : score >= 4 ? "usable" : score > 0 ? "weak" : "missing";
+  return {event, score, grade, matchedWords: score > 0 ? best.matchedWords : []};
+};
+
+const assertUsableJourneyEvidence = (matches: Array<{label: string; match: EvidenceMatch}>) => {
+  const missing = matches.filter(({match}) => match.grade === "weak" || match.grade === "missing");
+  if (missing.length === 0) return;
+  throw new PlanningError(
+    `SceneGraph refused to render because the capture is missing usable evidence for: ${
+      missing.map(({label}) => label).join("; ")
+    }. Record those product states or remove them from the Journey Direction.`,
+  );
 };
 
 const compactEvents = (capture: CaptureManifest) => {
@@ -152,17 +182,29 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const journeyBrief = brief.journey;
   const used = new Set<string>();
   const choose = (query: string, fallback: EvidenceEvent) => {
-    const event = evidenceFor(evidenceEvents, query, fallback, used);
-    used.add(event.id);
-    return event;
+    const match = evidenceFor(evidenceEvents, query, fallback, used);
+    used.add(match.event.id);
+    return match;
   };
-  const startEvent = journeyBrief ? choose(journeyBrief.startState, firstEvidence) : firstEvidence;
+  const startMatch = journeyBrief ? choose(journeyBrief.startState, firstEvidence) : undefined;
+  const startEvent = startMatch?.event ?? firstEvidence;
   const firstBeat = journeyBrief?.keyBeats[0];
   const secondBeat = journeyBrief?.keyBeats[1] ?? firstBeat;
   const thirdBeat = journeyBrief?.keyBeats[2] ?? secondBeat;
-  const actionEvent = journeyBrief && firstBeat ? choose(firstBeat, earlyClick) : earlyClick;
-  const outcomeEvent = journeyBrief && secondBeat ? choose(secondBeat, secondEvidence) : secondEvidence;
-  const proofEvent = journeyBrief ? choose(`${journeyBrief.successState} ${thirdBeat ?? ""}`, outcomeEvent) : earlyClick;
+  const actionMatch = journeyBrief && firstBeat ? choose(firstBeat, earlyClick) : undefined;
+  const outcomeMatch = journeyBrief && secondBeat ? choose(secondBeat, secondEvidence) : undefined;
+  const proofMatch = journeyBrief ? choose(`${journeyBrief.successState} ${thirdBeat ?? ""}`, outcomeMatch?.event ?? secondEvidence) : undefined;
+  const actionEvent = actionMatch?.event ?? earlyClick;
+  const outcomeEvent = outcomeMatch?.event ?? secondEvidence;
+  const proofEvent = proofMatch?.event ?? earlyClick;
+  if (journeyBrief) {
+    assertUsableJourneyEvidence([
+      {label: `start state: ${journeyBrief.startState}`, match: startMatch!},
+      ...(firstBeat ? [{label: `beat: ${firstBeat}`, match: actionMatch!}] : []),
+      ...(secondBeat ? [{label: `beat: ${secondBeat}`, match: outcomeMatch!}] : []),
+      {label: `success state: ${journeyBrief.successState}`, match: proofMatch!},
+    ]);
+  }
   const scenes = [
     {
       role: "hook" as const,
@@ -385,6 +427,9 @@ app.addContentTypeParser(["video/webm", "video/mp4", "application/octet-stream"]
 app.setErrorHandler((error, request, reply) => {
   if (error instanceof Error && error.name === "ZodError") {
     return reply.code(400).send({error: "The request does not match the SceneGraph contract"});
+  }
+  if (error instanceof PlanningError) {
+    return reply.code(error.statusCode).send({error: error.message});
   }
   request.log.error(error);
   return reply.code(500).send({error: "SceneGraph could not complete the request"});
