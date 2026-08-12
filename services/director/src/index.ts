@@ -180,7 +180,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       role: "problem" as const,
       durationMs: 3800,
       headline: journeyBrief ? shortSentence(journeyBrief.startState, 56) : "Spot the runtime state",
-      support: journeyBrief ? "Start from the captured before state." : "Start from the real deployment surface.",
+      support: journeyBrief ? "Start from the captured before state." : "Start from the real product surface.",
       eventId: startEvent.id,
       zoom: 1.18,
       rationale: "Use captured product evidence to establish the before state.",
