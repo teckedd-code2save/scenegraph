@@ -341,24 +341,30 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const firstBeat = journeyBrief?.keyBeats[0];
   const secondBeat = journeyBrief?.keyBeats[1] ?? firstBeat;
   const thirdBeat = journeyBrief?.keyBeats[2] ?? secondBeat;
+  const fourthBeat = journeyBrief?.keyBeats[3] ?? thirdBeat;
   const actionMatch = journeyBrief && firstBeat ? choose(firstBeat, earlyClick) : undefined;
   const outcomeMatch = journeyBrief && secondBeat ? choose(secondBeat, secondEvidence) : undefined;
-  const proofMatch = journeyBrief ? choose(`${journeyBrief.successState} ${thirdBeat ?? ""}`, outcomeMatch?.event ?? secondEvidence) : undefined;
+  const proofMatch = journeyBrief && thirdBeat ? choose(thirdBeat, outcomeMatch?.event ?? secondEvidence) : undefined;
+  const fitMatch = journeyBrief && fourthBeat ? choose(fourthBeat, proofMatch?.event ?? outcomeMatch?.event ?? secondEvidence) : undefined;
+  const closeMatch = journeyBrief ? choose(journeyBrief.successState, fitMatch?.event ?? proofMatch?.event ?? outcomeMatch?.event ?? secondEvidence) : undefined;
   const actionEvent = actionMatch?.event ?? earlyClick;
   const outcomeEvent = outcomeMatch?.event ?? secondEvidence;
-  const proofEvent = proofMatch?.event ?? earlyClick;
+  const proofEvent = proofMatch?.event ?? outcomeEvent;
+  const fitEvent = fitMatch?.event ?? proofEvent;
+  const closeEvent = closeMatch?.event ?? fitEvent;
   if (journeyBrief) {
     assertUsableJourneyEvidence([
       {label: `start state: ${journeyBrief.startState}`, match: startMatch!},
       ...(firstBeat ? [{label: `beat: ${firstBeat}`, match: actionMatch!}] : []),
       ...(secondBeat ? [{label: `beat: ${secondBeat}`, match: outcomeMatch!}] : []),
-      {label: `success state: ${journeyBrief.successState}`, match: proofMatch!},
+      ...(thirdBeat ? [{label: `beat: ${thirdBeat}`, match: proofMatch!}] : []),
+      {label: `success state: ${journeyBrief.successState}`, match: closeMatch!},
     ]);
   }
   const scenes = [
     {
       role: "hook" as const,
-      durationMs: 3200,
+      durationMs: 5200,
       headline: journeyBrief ? shortSentence(journeyBrief.goal, 56) : `${brief.productName} live control`,
       support: journeyBrief ? brief.productName : journey,
       eventId: startEvent.id,
@@ -372,7 +378,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     },
     {
       role: "problem" as const,
-      durationMs: 3800,
+      durationMs: 6200,
       headline: journeyBrief ? shortSentence(journeyBrief.startState, 56) : "Spot the runtime state",
       support: journeyBrief ? "Start from the captured before state." : "Start from the real product surface.",
       eventId: startEvent.id,
@@ -384,7 +390,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     },
     {
       role: "action" as const,
-      durationMs: 4200,
+      durationMs: 7000,
       headline: firstBeat ? titleCase(shortSentence(firstBeat, 52)) : "Open the operational signal",
       support: "The cut follows captured UI evidence.",
       eventId: actionEvent.id,
@@ -396,7 +402,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     },
     {
       role: "outcome" as const,
-      durationMs: 4200,
+      durationMs: 7000,
       headline: secondBeat ? titleCase(shortSentence(secondBeat, 52)) : "Inspect the evidence",
       support: journeyBrief ? "The next beat stays attached to the screen." : "Failure context stays attached to the screen.",
       eventId: outcomeEvent.id,
@@ -408,8 +414,8 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     },
     {
       role: "proof" as const,
-      durationMs: 3600,
-      headline: journeyBrief ? shortSentence(journeyBrief.successState, 56) : "Action stays in context",
+      durationMs: 7000,
+      headline: thirdBeat ? titleCase(shortSentence(thirdBeat, 52)) : journeyBrief ? shortSentence(journeyBrief.successState, 56) : "Action stays in context",
       support: "Every claim is tied to captured UI evidence.",
       eventId: proofEvent.id,
       zoom: 1.18,
@@ -418,21 +424,47 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
         ? `Proof evidence ${proofMatch.grade}: ${proofMatch.reason}.`
         : `The proof beat references ${eventLabel(proofEvent)}.`,
     },
+    {
+      role: "fit" as const,
+      durationMs: 6000,
+      headline: fourthBeat ? titleCase(shortSentence(fourthBeat, 52)) : shortSentence(`Built for ${brief.audience}`, 56),
+      support: shortSentence(brief.audience, 90),
+      eventId: fitEvent.id,
+      zoom: 1.16,
+      rationale: "Connect the recorded workflow to the intended buyer and use case.",
+      observation: fitMatch
+        ? `Fit evidence ${fitMatch.grade}: ${fitMatch.reason}.`
+        : `The fit beat references ${eventLabel(fitEvent)}.`,
+    },
+    {
+      role: "close" as const,
+      durationMs: 6600,
+      headline: shortSentence(journeyBrief.successState || brief.launchPromise, 60),
+      support: shortSentence(brief.launchPromise, 100),
+      eventId: closeEvent.id,
+      zoom: 1.1,
+      rationale: "Close on the captured outcome and the product promise after the workflow has been shown.",
+      observation: closeMatch
+        ? `Close evidence ${closeMatch.grade}: ${closeMatch.reason}.`
+        : `The close beat references ${eventLabel(closeEvent)}.`,
+    },
   ];
-  const configuredMaxPreviewMs = Number(process.env.SCENEGRAPH_PREVIEW_MAX_MS ?? 90_000);
-  const maxPreviewMs = Number.isFinite(configuredMaxPreviewMs) && configuredMaxPreviewMs > 0
-    ? configuredMaxPreviewMs
-    : 90_000;
+  const configuredPreviewMs = Number(process.env.SCENEGRAPH_PREVIEW_MS ?? 45_000);
+  const previewMs = Number.isFinite(configuredPreviewMs) && configuredPreviewMs > 0
+    ? configuredPreviewMs
+    : 45_000;
   const baseDurationMs = scenes.reduce((total, scene) => total + scene.durationMs, 0);
   const evidenceDurationMs = Math.max(0, ...capture.events.map((event) => event.atMs));
   const capturedDurationMs = Math.max(capture.durationMs || 0, evidenceDurationMs);
-  const targetDurationMs = Math.max(baseDurationMs, Math.min(capturedDurationMs || baseDurationMs, maxPreviewMs));
+  const targetDurationMs = capturedDurationMs
+    ? Math.min(previewMs, Math.max(18_000, capturedDurationMs))
+    : previewMs;
   const durationScale = targetDurationMs / baseDurationMs;
   let assignedDurationMs = 0;
   const expandedScenes = scenes.map((scene, index) => {
     const durationMs = index === scenes.length - 1
       ? Math.max(1000, targetDurationMs - assignedDurationMs)
-      : Math.max(scene.durationMs, Math.round(scene.durationMs * durationScale));
+      : Math.max(2200, Math.round(scene.durationMs * durationScale));
     assignedDurationMs += durationMs;
     return {...scene, durationMs};
   });
@@ -451,8 +483,15 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     const plannedStartMs = startMs;
     startMs += scene.durationMs;
     const sourceDurationMs = capturedDurationMs || scene.durationMs;
-    const fromMs = Math.max(0, Math.min(plannedStartMs, Math.max(0, sourceDurationMs - scene.durationMs)));
+    const storyPosition = expandedScenes.length <= 1 ? 0 : index / (expandedScenes.length - 1);
+    const sourceCenterMs = index === 0
+      ? scene.durationMs / 2
+      : index === expandedScenes.length - 1
+        ? sourceDurationMs - scene.durationMs / 2
+        : sourceDurationMs * storyPosition;
+    const fromMs = Math.max(0, Math.min(sourceCenterMs - scene.durationMs / 2, Math.max(0, sourceDurationMs - scene.durationMs)));
     const toMs = Math.min(fromMs + scene.durationMs, sourceDurationMs);
+    const eventInSource = event.atMs >= fromMs && event.atMs <= toMs;
     return {
       id: crypto.randomUUID(),
       role: scene.role,
@@ -469,7 +508,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
       },
       source: {fromMs, toMs},
       camera: camera(scene.zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
-      focusEventIds: rect ? [scene.eventId] : [],
+      focusEventIds: rect && eventInSource ? [scene.eventId] : [],
       transition: index === 0 ? "cut" : index % 3 === 0 ? "match" : "mask",
     };
   };
