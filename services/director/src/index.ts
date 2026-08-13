@@ -1,7 +1,7 @@
 import path from "node:path";
 import {createHmac, timingSafeEqual} from "node:crypto";
 import {createWriteStream} from "node:fs";
-import {mkdir, readFile, rename, stat, writeFile} from "node:fs/promises";
+import {mkdir, readFile, readdir, rename, stat, writeFile} from "node:fs/promises";
 import {pipeline} from "node:stream/promises";
 import type {Readable} from "node:stream";
 import Fastify from "fastify";
@@ -635,6 +635,25 @@ app.get("/health", async () => ({
   media: objectStore ? "r2" : "local",
   renderer: remoteRenderUrl ? "modal" : "local-worker",
 }));
+
+app.get("/v1/projects", async () => {
+  const files = await readdir(dataRoot).catch(() => []);
+  const projects = await Promise.all(files
+    .filter((file) => file.endsWith(".json"))
+    .map(async (file) => {
+      const project = await loadProject(path.basename(file, ".json"));
+      return {
+        id: project.id,
+        createdAt: project.createdAt,
+        productName: project.brief.productName,
+        productUrl: project.brief.productUrl,
+        launchPromise: project.brief.launchPromise,
+        captures: project.captures.length,
+        renders: project.renderJobIds.length,
+      };
+    }));
+  return projects.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+});
 
 app.post("/v1/projects", async (request, reply) => {
   const brief = productBriefSchema.parse(request.body);

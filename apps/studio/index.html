@@ -10,83 +10,142 @@
 </head>
 <body>
   <header>
-    <div class="brand"><span class="mark"><i></i><i></i><i></i><i></i></span><b>SceneGraph</b></div>
+    <button id="homeButton" class="brand ghost" type="button"><span class="mark"><i></i><i></i><i></i><i></i></span><b>SceneGraph</b></button>
     <div id="projectLabel" class="project" hidden></div>
     <span class="engine">Frame engine · 60 fps</span>
   </header>
+
   <main>
-    <section id="create" class="create">
-      <p class="eyebrow">New product · fresh workspace</p>
-      <h1>Direct the product.<br>Not the recording.</h1>
-      <p class="lede">One authentic walkthrough becomes a clean, scripted launch film with anchored motion and product-native colour.</p>
+    <section id="home" class="home">
+      <div class="homeHero">
+        <div>
+          <p class="eyebrow">Product workspaces</p>
+          <h1>Make launch films from real product journeys.</h1>
+          <p class="lede">Pick a workspace, capture a fresh pass, then let SceneGraph direct the preview from captured UI evidence.</p>
+        </div>
+        <div class="homeActions">
+          <button id="openCreate" type="button">New workspace →</button>
+          <button id="reloadWorkspaces" class="secondary" type="button">Reload list</button>
+        </div>
+      </div>
+
       <div class="access">
-        <label>Deployment access token<input id="accessToken" type="password" autocomplete="current-password" placeholder="Required on the hosted workspace"></label>
+        <label>Deployment access token<input id="accessToken" type="password" autocomplete="current-password" placeholder="Required on hosted deployments"></label>
         <span>Stored only in this browser. Leave blank for local development.</span>
       </div>
-      <form id="restore" class="restore">
-        <label>Open existing workspace<input id="restoreId" placeholder="Paste recorder project ID"></label>
-        <button>Open workspace</button>
-      </form>
-      <form id="brief">
-        <label>Product<input name="productName" required placeholder="Lepta QA"></label>
-        <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>
-        <label class="wide">Customer problem<input name="customerProblem" required minlength="12" placeholder="What painful job does this product remove?"></label>
-        <label>Audience<input name="audience" required placeholder="Product engineering teams"></label>
-        <label>Launch promise<input name="launchPromise" required placeholder="Ship confidence, not guesswork."></label>
-        <label class="wide">Demo goal<textarea name="journeyGoal" required minlength="12" placeholder="Show how the product turns a specific bad state into a verified outcome."></textarea></label>
-        <label class="wide">Start state<textarea name="journeyStartState" required minlength="8" placeholder="What is visibly wrong, risky, slow, or incomplete at the start?"></textarea></label>
-        <label class="wide">Key beats<textarea name="journeyKeyBeats" required minlength="8" placeholder="One per line: open the current state&#10;perform the decisive action&#10;inspect the changed result&#10;show the proof screen"></textarea></label>
-        <label class="wide">Success state<textarea name="journeySuccessState" required minlength="8" placeholder="What final state proves the product worked?"></textarea></label>
-        <label class="wide">Avoid<textarea name="journeyAvoid" placeholder="Optional: weak scenes or claims the Director should not use."></textarea></label>
-        <label>Signal colour<input name="primary" type="color" value="#1e9fe8"></label>
-        <button>Create product workspace →</button>
-      </form>
-      <p id="createNotice" class="notice">Create a workspace for this product.</p>
+
+      <section class="workspaceIndex">
+        <div class="sectionHead">
+          <div><strong>Available workspaces</strong><span id="workspaceCount">Loading...</span></div>
+          <form id="restore" class="restore">
+            <input id="restoreId" placeholder="Open by project ID">
+            <button class="secondary">Open</button>
+          </form>
+        </div>
+        <div id="workspaceList" class="workspaceList"></div>
+      </section>
+      <p id="createNotice" class="notice"></p>
     </section>
+
     <section id="workspace" class="workspace" hidden>
       <div class="workspaceHead">
-        <div><p class="eyebrow">Launch workspace</p><h1 id="promise"></h1></div>
-        <div class="actions"><button id="newWorkspace" class="secondary">New workspace</button><button id="refresh" class="secondary">Refresh capture</button><button id="master" class="secondary" hidden>Render 1080p master</button><button id="generate">Generate preview →</button></div>
-      </div>
-      <div class="captureStep">
-        <span id="captureStatus" class="status">Awaiting clean capture</span>
-        <div><strong>Recorder project ID</strong><code id="projectId"></code></div>
-        <p id="captureCopy">Connect the extension to this workspace, open the product tab, then let SceneGraph collect the journey evidence.</p>
-      </div>
-      <div class="extensionConnect">
         <div>
-          <strong>Browser capture</strong>
-          <p id="extensionStatus">Pair the extension so it knows this workspace, the Studio API, and the product URL.</p>
+          <button id="backToWorkspaces" class="linkButton" type="button">← Workspaces</button>
+          <p class="eyebrow">Launch workspace</p>
+          <h1 id="promise"></h1>
         </div>
-        <div class="captureActions">
-          <button id="pairExtension" class="secondary" type="button">Connect extension</button>
-          <button id="openProduct" type="button">Open product tab →</button>
+        <div class="actions">
+          <button id="newCapture" type="button">New capture →</button>
+          <button id="generate" class="secondary">Generate preview</button>
+          <button id="master" class="secondary" hidden>Render 1080p master</button>
+          <button id="openDirection" class="secondary" type="button">Direction</button>
         </div>
       </div>
-      <form id="journey" class="journey">
-        <label class="wide">Demo goal<textarea name="goal" required minlength="12"></textarea></label>
-        <label class="wide">Start state<textarea name="startState" required minlength="8"></textarea></label>
-        <label class="wide">Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
-        <label class="wide">Success state<textarea name="successState" required minlength="8"></textarea></label>
-        <label class="wide">Avoid<textarea name="avoid"></textarea></label>
-        <button class="secondary">Save direction</button>
-      </form>
-      <div id="stage" class="stage">
-        <div class="stageMark">SG</div><p id="stageMessage">Your clean product film will appear here.</p>
-        <div id="progress" class="progress" hidden><i></i></div><p id="renderError" class="error"></p>
+
+      <div class="workspaceGrid">
+        <section class="panel capturePanel">
+          <div class="panelHead">
+            <div>
+              <span id="captureStatus" class="status">Awaiting capture</span>
+              <strong>Browser capture</strong>
+            </div>
+            <code id="projectId"></code>
+          </div>
+          <p id="captureCopy">Connect the extension to this workspace, open the product tab, then let SceneGraph collect journey evidence.</p>
+          <p id="extensionStatus" class="muted">Pair the extension so it knows this workspace, the Studio API, and the product URL.</p>
+          <div class="captureActions">
+            <button id="pairExtension" class="secondary" type="button">Connect extension</button>
+            <button id="openProduct" class="secondary" type="button">Open product tab</button>
+          </div>
+        </section>
+
+        <section class="panel planPanel">
+          <div class="panelHead"><strong>Directing plan</strong><span id="planState">Waiting for direction</span></div>
+          <div id="timeline" class="timeline"></div>
+        </section>
       </div>
+
+      <section class="filmShell">
+        <div id="stage" class="stage">
+          <div class="stageMark">SG</div>
+          <p id="stageMessage">Your clean product film will appear here.</p>
+          <div id="progress" class="progress" hidden><i></i></div>
+          <p id="renderError" class="error"></p>
+        </div>
+        <div id="player" class="player" hidden>
+          <video id="renderVideo" controls></video>
+          <span id="quality" class="quality"></span>
+          <a id="downloadRender" class="download" download hidden>Download MP4 ↓</a>
+        </div>
+      </section>
+
       <section id="guidance" class="guidance" hidden>
         <div>
-          <strong>SceneGraph needs a few more moments before it can direct this preview.</strong>
+          <strong>SceneGraph needs more product evidence.</strong>
           <p>Capture the missing product states, or update the direction to match what is already recorded.</p>
         </div>
         <ul id="guidanceList"></ul>
       </section>
-      <div id="player" class="player" hidden><video id="renderVideo" controls></video><span id="quality" class="quality"></span><a id="downloadRender" class="download" download hidden>Download directed MP4 ↓</a></div>
-      <div id="timeline" class="timeline"></div>
       <p id="notice" class="notice"></p>
     </section>
   </main>
+
+  <dialog id="createDialog">
+    <form id="brief" method="dialog" class="dialogForm">
+      <div class="dialogHead">
+        <div><p class="eyebrow">New workspace</p><h2>Define the product journey</h2></div>
+        <button id="closeCreate" class="iconButton" type="button" aria-label="Close">×</button>
+      </div>
+      <label>Product<input name="productName" required placeholder="Lepta QA"></label>
+      <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>
+      <label class="wide">Customer problem<input name="customerProblem" required minlength="12" placeholder="What painful job does this product remove?"></label>
+      <label>Audience<input name="audience" required placeholder="Product engineering teams"></label>
+      <label>Launch promise<input name="launchPromise" required placeholder="Ship confidence, not guesswork."></label>
+      <label class="wide">Demo goal<textarea name="journeyGoal" required minlength="12" placeholder="Show how the product turns a bad state into a verified outcome."></textarea></label>
+      <label class="wide">Start state<textarea name="journeyStartState" required minlength="8" placeholder="What is visibly wrong, risky, slow, or incomplete at the start?"></textarea></label>
+      <label class="wide">Key beats<textarea name="journeyKeyBeats" required minlength="8" placeholder="One per line: open the current state&#10;perform the decisive action&#10;inspect the changed result&#10;show the proof screen"></textarea></label>
+      <label class="wide">Success state<textarea name="journeySuccessState" required minlength="8" placeholder="What final state proves the product worked?"></textarea></label>
+      <label class="wide">Avoid<textarea name="journeyAvoid" placeholder="Optional: weak scenes or claims the Director should not use."></textarea></label>
+      <label>Signal colour<input name="primary" type="color" value="#1e9fe8"></label>
+      <button>Create workspace →</button>
+    </form>
+  </dialog>
+
+  <dialog id="directionDialog">
+    <form id="journey" method="dialog" class="dialogForm">
+      <div class="dialogHead">
+        <div><p class="eyebrow">Direction</p><h2>What should this launch film prove?</h2></div>
+        <button id="closeDirection" class="iconButton" type="button" aria-label="Close">×</button>
+      </div>
+      <label class="wide">Demo goal<textarea name="goal" required minlength="12"></textarea></label>
+      <label class="wide">Start state<textarea name="startState" required minlength="8"></textarea></label>
+      <label class="wide">Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
+      <label class="wide">Success state<textarea name="successState" required minlength="8"></textarea></label>
+      <label class="wide">Avoid<textarea name="avoid"></textarea></label>
+      <button>Save direction</button>
+    </form>
+  </dialog>
+
   <script src="config.js"></script>
   <script type="module" src="app.js"></script>
 </body>

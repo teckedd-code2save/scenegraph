@@ -4,7 +4,9 @@ let project = null;
 let render = null;
 let poll = null;
 let capturePoll = null;
+let workspaces = [];
 const $ = (selector) => document.querySelector(selector);
+const submitButton = (form) => form.querySelector('button[type="submit"], button:not([type])');
 let accessToken = localStorage.getItem("scenegraphAccessToken") ?? "";
 $("#accessToken").value = accessToken;
 
@@ -16,10 +18,41 @@ const request = (pathname, options = {}) => fetch(`${api}${pathname}`, {
   },
 });
 
+const syncAccessToken = () => {
+  accessToken = $("#accessToken").value.trim();
+  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
+  else localStorage.removeItem("scenegraphAccessToken");
+};
+
 const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direction"}))) => {
   $("#timeline").innerHTML = scenes.map((scene, index) =>
     `<article><small>${String(index + 1).padStart(2, "0")}</small><strong>${escape(scene.role)}</strong><span>${escape(scene.headline)}</span><em>${escape(scene.rationale ?? "No scene rationale yet.")}</em></article>`
   ).join("");
+};
+
+const renderWorkspaceList = () => {
+  $("#workspaceCount").textContent = `${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`;
+  $("#workspaceList").innerHTML = workspaces.length ? workspaces.map((item) => `
+    <button class="workspaceItem" type="button" data-project-id="${escape(item.id)}">
+      <span>
+        <strong>${escape(item.productName)}</strong>
+        <em>${escape(item.launchPromise)}</em>
+      </span>
+      <small>${item.captures} capture${item.captures === 1 ? "" : "s"} · ${item.renders} render${item.renders === 1 ? "" : "s"}</small>
+    </button>
+  `).join("") : `<div class="emptyState"><strong>No workspaces yet.</strong><span>Create one to start capturing product evidence.</span></div>`;
+};
+
+const loadWorkspaces = async () => {
+  syncAccessToken();
+  const response = await request("/v1/projects").catch(() => null);
+  if (!response?.ok) {
+    $("#workspaceCount").textContent = "Unavailable";
+    $("#workspaceList").innerHTML = `<div class="emptyState"><strong>Could not load workspaces.</strong><span>Check the Director API and access token.</span></div>`;
+    return;
+  }
+  workspaces = await response.json();
+  renderWorkspaceList();
 };
 
 const escape = (value) => String(value).replace(/[&<>"']/g, (character) => ({
@@ -194,7 +227,7 @@ async function showPlayableRender() {
 const showProject = () => {
   clearInterval(capturePoll);
   localStorage.setItem("scenegraphActiveProjectId", project.id);
-  $("#create").hidden = true;
+  $("#home").hidden = true;
   $("#workspace").hidden = false;
   $("#projectLabel").hidden = false;
   $("#projectLabel").innerHTML = `${escape(project.brief.productName)}<span>Product workspace</span>`;
@@ -210,6 +243,7 @@ const showProject = () => {
   $("#generate").disabled = !ready;
   setJourneyForm();
   timeline(project.plans.at(-1)?.scenes);
+  $("#planState").textContent = project.plans.length ? "Latest plan ready" : "No generated plan yet";
   requestExtensionStatus();
   if (!ready) capturePoll = setInterval(checkCapture, 2500);
 };
@@ -230,27 +264,26 @@ const restoreLatestRender = async () => {
   await showPlayableRender();
 };
 
-const showCreate = () => {
+const showHome = async () => {
   clearInterval(poll);
   clearInterval(capturePoll);
   localStorage.removeItem("scenegraphActiveProjectId");
   project = null;
   render = null;
   $("#workspace").hidden = true;
-  $("#create").hidden = false;
+  $("#home").hidden = false;
   $("#projectLabel").hidden = true;
   $("#projectLabel").textContent = "";
   $("#restoreId").value = "";
-  $("#createNotice").textContent = "Create a workspace for this product.";
+  $("#createNotice").textContent = "";
   resetPlayer();
   timeline();
+  await loadWorkspaces();
 };
 
 const loadProject = async (id, quiet = false) => {
   if (!id) return false;
-  accessToken = $("#accessToken").value.trim();
-  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
-  else localStorage.removeItem("scenegraphAccessToken");
+  syncAccessToken();
   const response = await request(`/v1/projects/${id}`).catch(() => null);
   if (!response?.ok) {
     if (!quiet) $("#createNotice").textContent = "That workspace could not be opened. Check the project ID and API.";
@@ -265,7 +298,7 @@ const loadProject = async (id, quiet = false) => {
 
 $("#restore").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = event.currentTarget.querySelector("button");
+  const button = submitButton(event.currentTarget);
   button.disabled = true; button.textContent = "Opening...";
   await loadProject($("#restoreId").value.trim());
   button.disabled = false; button.textContent = "Open workspace";
@@ -273,11 +306,9 @@ $("#restore").addEventListener("submit", async (event) => {
 
 $("#brief").addEventListener("submit", async (event) => {
   event.preventDefault();
-  accessToken = $("#accessToken").value.trim();
-  if (accessToken) localStorage.setItem("scenegraphAccessToken", accessToken);
-  else localStorage.removeItem("scenegraphAccessToken");
-  const button = event.currentTarget.querySelector("button");
-  button.disabled = true; button.textContent = "Creating…";
+  syncAccessToken();
+  const button = submitButton(event.currentTarget);
+  button.disabled = true; button.textContent = "Creating...";
   const values = Object.fromEntries(new FormData(event.currentTarget));
   const journey = {
     goal: values.journeyGoal,
@@ -302,14 +333,16 @@ $("#brief").addEventListener("submit", async (event) => {
   button.disabled = false; button.textContent = "Create product workspace →";
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
   project = await response.json();
+  $("#createDialog").close();
+  await loadWorkspaces();
   showProject();
   $("#notice").textContent = "Workspace ready. Connect the browser extension, then record the product tab.";
 });
 
-$("#refresh").addEventListener("click", async () => {
+const refreshProject = async () => {
   const response = await request(`/v1/projects/${project.id}`);
   if (response.ok) {project = await response.json(); showProject(); await restoreLatestRender();}
-});
+};
 
 async function checkCapture() {
   if (!project) return;
@@ -324,11 +357,26 @@ async function checkCapture() {
   $("#notice").textContent = "Capture uploaded. SceneGraph has fresh product evidence.";
 }
 
-$("#newWorkspace").addEventListener("click", showCreate);
+$("#homeButton").addEventListener("click", showHome);
+$("#backToWorkspaces").addEventListener("click", showHome);
+$("#openCreate").addEventListener("click", () => $("#createDialog").showModal());
+$("#closeCreate").addEventListener("click", () => $("#createDialog").close());
+$("#openDirection").addEventListener("click", () => $("#directionDialog").showModal());
+$("#closeDirection").addEventListener("click", () => $("#directionDialog").close());
+$("#reloadWorkspaces").addEventListener("click", loadWorkspaces);
 $("#pairExtension").addEventListener("click", pairExtension);
 $("#openProduct").addEventListener("click", () => {
   if (!project?.brief.productUrl) return;
   window.open(project.brief.productUrl, "_blank", "noopener");
+});
+$("#newCapture").addEventListener("click", () => {
+  pairExtension();
+  if (project?.brief.productUrl) window.open(project.brief.productUrl, "_blank", "noopener");
+});
+$("#workspaceList").addEventListener("click", async (event) => {
+  if (!(event.target instanceof Element)) return;
+  const item = event.target.closest("[data-project-id]");
+  if (item) await loadProject(item.dataset.projectId);
 });
 
 window.addEventListener("message", (event) => {
@@ -355,7 +403,7 @@ window.addEventListener("message", (event) => {
 
 $("#journey").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = event.currentTarget.querySelector("button");
+  const button = submitButton(event.currentTarget);
   button.disabled = true; button.textContent = "Saving...";
   const response = await request(`/v1/projects/${project.id}/brief`, {
     method: "PUT",
@@ -369,6 +417,7 @@ $("#journey").addEventListener("submit", async (event) => {
   }
   project = await response.json();
   showProject();
+  $("#directionDialog").close();
   $("#notice").textContent = "Direction saved. The next preview will follow this journey.";
 });
 
@@ -418,4 +467,6 @@ async function checkRender() {
 }
 
 timeline();
-void loadProject(localStorage.getItem("scenegraphActiveProjectId"), true);
+const activeProjectId = localStorage.getItem("scenegraphActiveProjectId");
+if (activeProjectId) void loadProject(activeProjectId, true).then((opened) => { if (!opened) void showHome(); });
+else void showHome();
