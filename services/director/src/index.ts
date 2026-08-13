@@ -521,8 +521,25 @@ const renderStatus = async (
   request: {protocol: string; host: string},
   jobId: string,
 ) => {
+  const localRender = async () => {
+    for (const profile of ["master", "preview"] as const) {
+      const outputLocation = path.join(renderRoot, `${jobId}-${profile}.mp4`);
+      const ready = await stat(outputLocation).then((file) => file.size > 0).catch(() => false);
+      if (ready) {
+        return {
+          jobId,
+          state: "completed" as const,
+          progress: 100,
+          profile,
+          downloadUrl: signedAssetUrl(request, `/renders/${path.basename(outputLocation)}`),
+        };
+      }
+    }
+    return undefined;
+  };
+
   const job = await queue.getJob(jobId);
-  if (!job) return {jobId, state: "expired" as const};
+  if (!job) return localRender() ?? {jobId, state: "expired" as const};
   const state = await job.getState();
   const result = job.returnvalue ? renderResultSchema.parse(job.returnvalue) : undefined;
   const localOutputReady = result?.outputLocation
@@ -533,6 +550,7 @@ const renderStatus = async (
     : result?.outputLocation && localOutputReady
       ? signedAssetUrl(request, `/renders/${path.basename(result.outputLocation)}`)
       : undefined;
+  if (!downloadUrl && state === "completed") return localRender() ?? {jobId, state: "expired" as const};
   return {
     jobId,
     state,
@@ -761,7 +779,7 @@ app.get("/v1/projects/:id/renders/:jobId", async (request, reply) => {
   const project = await loadProject(id);
   if (!project.renderJobIds.includes(jobId)) return reply.code(404).send({error: "Render not found"});
   const status = await renderStatus(request, jobId);
-  if (status.state === "expired") return reply.code(404).send({error: "Render job expired"});
+  if (!status || (status as {state?: string}).state === "expired") return reply.code(404).send({error: "Render job expired"});
   return status;
 });
 app.post("/v1/plan", async (request, reply) => {
