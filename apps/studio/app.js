@@ -426,9 +426,19 @@ async function requestRender(pathname, waitingMessage) {
   $("#master").disabled = true;
   resetPlayer();
   $("#stage").hidden = false;
-  const response = await request(`/v1/projects/${project.id}/${pathname}`, {method: "POST"});
+  const response = await request(`/v1/projects/${project.id}/${pathname}`, {
+    method: "POST",
+    signal: AbortSignal.timeout(30_000),
+  }).catch(() => null);
+  if (!response) {
+    $("#stageMessage").textContent = "Preview could not start";
+    $("#renderError").textContent = "The render queue did not respond. Check Redis and the render worker, then try again.";
+    $("#generate").disabled = false;
+    $("#master").disabled = false;
+    return;
+  }
   if (!response.ok) {
-    const problem = await response.json();
+    const problem = await response.json().catch(() => ({error: "Preview could not start"}));
     showGuidance(problem);
     $("#generate").disabled = false;
     $("#master").disabled = false;

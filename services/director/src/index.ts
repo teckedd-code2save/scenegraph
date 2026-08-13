@@ -1,7 +1,8 @@
 import path from "node:path";
+import {spawn} from "node:child_process";
 import {createHmac, timingSafeEqual} from "node:crypto";
-import {createWriteStream} from "node:fs";
-import {mkdir, readFile, readdir, rename, stat, writeFile} from "node:fs/promises";
+import {createReadStream, createWriteStream} from "node:fs";
+import {mkdir, readFile, readdir, rename, stat, unlink, writeFile} from "node:fs/promises";
 import {pipeline} from "node:stream/promises";
 import type {Readable} from "node:stream";
 import Fastify from "fastify";
@@ -488,6 +489,22 @@ const saveProject = async (project: StoredProject) => {
   await rename(temporary, destination);
 };
 
+const run = (command: string, args: string[]) => new Promise<void>((resolve, reject) => {
+  const child = spawn(command, args, {stdio: ["ignore", "ignore", "pipe"]});
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  child.on("error", reject);
+  child.on("close", (code) => code === 0 ? resolve() : reject(new Error(stderr.slice(-1000) || `${command} exited ${code}`)));
+});
+
+const normalizeCaptureVideo = async (input: string, extension: "mp4" | "webm") => {
+  if (extension !== "webm") return {path: input, extension};
+  const output = `${input}.normalized.webm`;
+  await run("ffmpeg", ["-y", "-hide_banner", "-loglevel", "error", "-fflags", "+genpts", "-i", input, "-c", "copy", output]);
+  await unlink(input).catch(() => undefined);
+  return {path: output, extension};
+};
+
 const accessToken = process.env.SCENEGRAPH_ACCESS_TOKEN?.trim();
 if (process.env.NODE_ENV === "production" && !accessToken) {
   throw new Error("SCENEGRAPH_ACCESS_TOKEN is required in production");
@@ -719,20 +736,23 @@ app.put("/v1/projects/:id/captures/:captureId/video", async (request, reply) => 
   await loadProject(id);
   if (!/^[0-9a-f-]{36}$/i.test(captureId)) return reply.code(400).send({error: "Capture ID must be a UUID"});
   const extension = request.headers["content-type"]?.includes("mp4") ? "mp4" : "webm";
-  const assetKey = `captures/${id}/${captureId}.${extension}`;
+  const uploadDir = path.join(mediaRoot, id);
+  await mkdir(uploadDir, {recursive: true});
+  const upload = path.join(uploadDir, `${captureId}.${extension}.${crypto.randomUUID()}.upload`);
+  await pipeline(request.body as Readable, createWriteStream(upload, {flags: "wx"}));
+  const normalized = await normalizeCaptureVideo(upload, extension);
+  const assetKey = `captures/${id}/${captureId}.${normalized.extension}`;
   if (objectStore) {
-    await objectStore.put(assetKey, request.body as Readable, `video/${extension}`);
+    await objectStore.put(assetKey, createReadStream(normalized.path), `video/${normalized.extension}`);
+    await unlink(normalized.path).catch(() => undefined);
     return reply.code(201).send({
       assetKey,
       videoUrl: await objectStore.signedGetUrl(assetKey, 12 * 60 * 60),
     });
   }
-  const destination = path.join(mediaRoot, id, `${captureId}.${extension}`);
-  await mkdir(path.dirname(destination), {recursive: true});
-  const temporary = `${destination}.${crypto.randomUUID()}.upload`;
-  await pipeline(request.body as Readable, createWriteStream(temporary, {flags: "wx"}));
-  await rename(temporary, destination);
-  const pathname = `/media/${id}/${captureId}.${extension}`;
+  const destination = path.join(uploadDir, `${captureId}.${normalized.extension}`);
+  await rename(normalized.path, destination);
+  const pathname = `/media/${id}/${captureId}.${normalized.extension}`;
   return reply.code(201).send({videoUrl: signedAssetUrl(request, pathname)});
 });
 
