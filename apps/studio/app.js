@@ -88,6 +88,23 @@ const setJourneyForm = () => {
   form.elements.avoid.value = journey.avoid ?? "";
 };
 
+const ensureDirection = async () => {
+  if (project.brief.journey) return true;
+  const journey = defaultJourney(project.brief);
+  const response = await request(`/v1/projects/${project.id}/brief`, {
+    method: "PUT",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify({...project.brief, journey}),
+  }).catch(() => null);
+  if (!response?.ok) {
+    $("#notice").textContent = "Direction could not be saved. Open Direction, save it, then generate again.";
+    return false;
+  }
+  project = await response.json();
+  showProject();
+  return true;
+};
+
 const extensionSettings = () => ({
   apiUrl: api,
   accessToken,
@@ -422,6 +439,7 @@ $("#journey").addEventListener("submit", async (event) => {
 });
 
 async function requestRender(pathname, waitingMessage) {
+  if (!await ensureDirection()) return;
   $("#generate").disabled = true;
   $("#master").disabled = true;
   resetPlayer();

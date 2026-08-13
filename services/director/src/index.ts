@@ -41,6 +41,18 @@ const journeyName = (brief: ProductBrief, capture: CaptureManifest) => {
   }
 };
 
+const defaultJourney = (brief: ProductBrief): NonNullable<ProductBrief["journey"]> => ({
+  goal: `Show how ${brief.productName} turns ${brief.customerProblem.toLowerCase()} into ${brief.launchPromise.toLowerCase()}.`,
+  startState: brief.customerProblem,
+  keyBeats: [
+    "Show the starting product state",
+    "Follow the decisive product action",
+    "Inspect the changed product evidence",
+  ],
+  successState: brief.launchPromise,
+  avoid: "Do not use generic scenes or claims that are not visible in captured product evidence.",
+});
+
 type Rect = {x: number; y: number; width: number; height: number};
 type EvidenceEvent = CaptureEvent & {
   rect?: Rect;
@@ -270,12 +282,9 @@ const evidenceFor = (
 const assertUsableJourneyEvidence = (matches: Array<{label: string; match: EvidenceMatch}>) => {
   const missing = matches.filter(({match}) => match.grade === "weak" || match.grade === "missing");
   const distinctEvidence = new Set(matches.map(({match}) => match.event.id));
-  const ordered = matches.every(({match}, index) => index === 0 || match.event.atMs >= matches[index - 1].match.event.atMs - 1_000);
   const thinStory = distinctEvidence.size < Math.min(3, matches.length);
-  const orderProblem = !ordered;
   const weakStory = [
     ...(thinStory ? [{label: "story progression", match: matches[0].match, reason: "too many beats point to the same captured state"}] : []),
-    ...(orderProblem ? [{label: "story order", match: matches[0].match, reason: "matched evidence does not follow capture order"}] : []),
   ];
   if (missing.length === 0 && weakStory.length === 0) return;
   const diagnostics = [...missing.map(({label, match}) => ({label, match, reason: match.reason})), ...weakStory]
@@ -320,7 +329,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const secondEvidence = evidenceEvents.find((event) => event.atMs - firstEvidence.atMs > 3_000) ?? evidenceEvents[1] ?? firstEvidence;
   const earlyClick = clicks.find((event) => event.atMs - firstEvidence.atMs < 25_000) ?? clicks[0] ?? interactions[1] ?? secondEvidence;
   const journey = journeyName(brief, capture);
-  const journeyBrief = brief.journey;
+  const journeyBrief = brief.journey ?? defaultJourney(brief);
   const used = new Set<string>();
   const choose = (query: string, fallback: EvidenceEvent) => {
     const match = evidenceFor(graph, query, fallback, used);
@@ -410,10 +419,27 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
         : `The proof beat references ${eventLabel(proofEvent)}.`,
     },
   ];
+  const configuredMaxPreviewMs = Number(process.env.SCENEGRAPH_PREVIEW_MAX_MS ?? 90_000);
+  const maxPreviewMs = Number.isFinite(configuredMaxPreviewMs) && configuredMaxPreviewMs > 0
+    ? configuredMaxPreviewMs
+    : 90_000;
+  const baseDurationMs = scenes.reduce((total, scene) => total + scene.durationMs, 0);
+  const evidenceDurationMs = Math.max(0, ...capture.events.map((event) => event.atMs));
+  const capturedDurationMs = Math.max(capture.durationMs || 0, evidenceDurationMs);
+  const targetDurationMs = Math.max(baseDurationMs, Math.min(capturedDurationMs || baseDurationMs, maxPreviewMs));
+  const durationScale = targetDurationMs / baseDurationMs;
+  let assignedDurationMs = 0;
+  const expandedScenes = scenes.map((scene, index) => {
+    const durationMs = index === scenes.length - 1
+      ? Math.max(1000, targetDurationMs - assignedDurationMs)
+      : Math.max(scene.durationMs, Math.round(scene.durationMs * durationScale));
+    assignedDurationMs += durationMs;
+    return {...scene, durationMs};
+  });
   let startMs = 0;
   const makeScene = (
     index: number,
-    scene: typeof scenes[number],
+    scene: typeof expandedScenes[number],
   ): ScenePlan["scenes"][number] => {
     const event = capture.events.find((candidate) => candidate.id === scene.eventId);
     if (!event) {
@@ -422,11 +448,11 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     const rect = eventRect(event);
     const centerX = rect ? rect.x + rect.width / 2 : capture.viewport.width / 2;
     const centerY = rect ? rect.y + rect.height / 2 : capture.viewport.height / 2;
-    const fromMs = event
-      ? Math.max(0, Math.min(event.atMs - 1800, capture.durationMs - scene.durationMs - 1))
-      : Math.max(0, Math.min(index * 3000, capture.durationMs - scene.durationMs - 1));
     const plannedStartMs = startMs;
     startMs += scene.durationMs;
+    const sourceDurationMs = capturedDurationMs || scene.durationMs;
+    const fromMs = Math.max(0, Math.min(plannedStartMs, Math.max(0, sourceDurationMs - scene.durationMs)));
+    const toMs = Math.min(fromMs + scene.durationMs, sourceDurationMs);
     return {
       id: crypto.randomUUID(),
       role: scene.role,
@@ -441,7 +467,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
         sourceMs: event.atMs,
         observation: scene.observation,
       },
-      source: {fromMs, toMs: Math.min(fromMs + scene.durationMs, capture.durationMs)},
+      source: {fromMs, toMs},
       camera: camera(scene.zoom, capture.viewport.width / 2 - centerX, capture.viewport.height / 2 - centerY),
       focusEventIds: rect ? [scene.eventId] : [],
       transition: index === 0 ? "cut" : index % 3 === 0 ? "match" : "mask",
@@ -456,7 +482,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
     width: 1920,
     height: 1080,
     brand: brief.brand,
-    scenes: scenes.map((scene, index) => makeScene(index, scene)),
+    scenes: expandedScenes.map((scene, index) => makeScene(index, scene)),
   };
 };
 

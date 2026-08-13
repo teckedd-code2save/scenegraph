@@ -4,6 +4,7 @@ const bridgeMessages = new Set(["SCENEGRAPH_CONFIGURE_EXTENSION", "SCENEGRAPH_EX
 const isStudioBridgePage = () =>
   Boolean(document.querySelector('meta[name="scenegraph-studio"][content="capture-bridge"]'));
 let captureBar: HTMLDivElement | null = null;
+let cursorStyle: HTMLStyleElement | null = null;
 
 const selectorFor = (element: Element): string => {
   const testId = element.getAttribute("data-testid");
@@ -126,6 +127,23 @@ const hideCaptureBar = () => {
   captureBar = null;
 };
 
+const hideRealCursor = () => {
+  if (cursorStyle) return;
+  cursorStyle = document.createElement("style");
+  cursorStyle.id = "scenegraph-hide-real-cursor";
+  cursorStyle.textContent = [
+    "html, body, body *:not(#scenegraph-capture-bar):not(#scenegraph-capture-bar *) {",
+    "  cursor: none !important;",
+    "}",
+  ].join("\n");
+  document.documentElement.append(cursorStyle);
+};
+
+const showRealCursor = () => {
+  cursorStyle?.remove();
+  cursorStyle = null;
+};
+
 const setCaptureBarStatus = (message: string) => {
   const label = captureBar?.querySelector("span");
   if (label) label.textContent = message;
@@ -233,14 +251,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === "SCENEGRAPH_START") {
     state.active = true;
     state.startedAt = performance.now();
+    hideRealCursor();
     showCaptureBar();
     emit({kind: "navigation", url: location.href});
     snapshot();
   } else if (message.type === "SCENEGRAPH_STOP") {
     state.active = false;
+    showRealCursor();
     setCaptureBarStatus("Uploading capture");
   } else if (message.type === "SCENEGRAPH_CAPTURE_DONE") {
     state.active = false;
+    showRealCursor();
     setCaptureBarStatus(message.ok ? "Capture uploaded" : message.error || "Upload failed");
     if (message.ok) setTimeout(hideCaptureBar, 1200);
   }

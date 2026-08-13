@@ -106,94 +106,12 @@ const SceneLabel: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
   );
 };
 
-const Cursor: React.FC<{
-  event: VisualEvent;
-  viewport: RenderJob["capture"]["viewport"];
-  sourceFromMs: number;
-  color: string;
-}> = ({event, viewport, sourceFromMs, color}) => {
-  const frame = useCurrentFrame();
-  const {fps, width, height} = useVideoConfig();
-  const targetX = (event.rect.x + event.rect.width / 2) / viewport.width * width;
-  const targetY = (event.rect.y + event.rect.height / 2) / viewport.height * height;
-  const eventFrame = Math.max(0, Math.round((event.atMs - sourceFromMs) / 1000 * fps));
-  const arrive = spring({
-    frame: frame - Math.max(0, eventFrame - Math.round(fps * 0.42)),
-    fps,
-    config: {damping: 26, stiffness: 95, mass: 0.72},
-  });
-  const x = interpolate(arrive, [0, 1], [targetX - Math.min(96, width * 0.06), targetX]);
-  const y = interpolate(arrive, [0, 1], [targetY - Math.min(64, height * 0.06), targetY]);
-  const clickAge = frame - eventFrame;
-  const ring = event.kind === "click" && clickAge >= 0 && clickAge <= 9
-    ? interpolate(clickAge, [0, 9], [0, 1])
-    : null;
-  const press = event.kind === "click" && clickAge >= -1 && clickAge <= 4
-    ? interpolate(clickAge, [-1, 1, 4], [1, 0.91, 1], {extrapolateLeft: "clamp", extrapolateRight: "clamp"})
-    : 1;
-  return (
-    <>
-      {ring !== null ? <div style={{
-        position: "absolute", left: x - 10 - ring * 9, top: y - 10 - ring * 9,
-        width: 20 + ring * 18, height: 20 + ring * 18, borderRadius: 999,
-        border: `2px solid ${color}`, opacity: 1 - ring,
-      }} /> : null}
-      <svg viewBox="0 0 32 40" width="32" height="40" style={{
-        position: "absolute", left: x, top: y, transform: `translate(-3px,-2px) scale(${press * 1.16})`,
-        transformOrigin: "3px 2px",
-        filter: "drop-shadow(0 4px 10px rgba(0,0,0,.52))",
-      }}>
-        <path d="M3 2v29l8-7 6 13 5-3-6-12h11z" fill="white" stroke={color} strokeWidth="2"/>
-      </svg>
-    </>
-  );
-};
-
-const TargetHighlight: React.FC<{
-  event: VisualEvent;
-  viewport: RenderJob["capture"]["viewport"];
-  color: string;
-}> = ({event, viewport, color}) => {
-  const frame = useCurrentFrame();
-  const {width, height, fps} = useVideoConfig();
-  const pulse = spring({frame, fps, config: {damping: 24, stiffness: 85}});
-  const left = event.rect.x / viewport.width * width;
-  const top = event.rect.y / viewport.height * height;
-  const rectWidth = event.rect.width / viewport.width * width;
-  const rectHeight = event.rect.height / viewport.height * height;
-  return (
-    <div style={{
-      position: "absolute",
-      left: left - 8,
-      top: top - 8,
-      width: rectWidth + 16,
-      height: rectHeight + 16,
-      borderRadius: 10,
-      border: `2px solid ${color}`,
-      boxShadow: `0 0 0 ${8 * pulse}px rgba(30,143,225,${0.16 * (1 - pulse)})`,
-      opacity: 0.8,
-    }} />
-  );
-};
-
 const Product: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
   const frame = useCurrentFrame();
   const {fps, width, height} = useVideoConfig();
   const duration = Math.round(scene.durationMs / 1000 * fps);
   const sourceFromMs = scene.source?.fromMs ?? 0;
-  const sourceToMs = scene.source?.toMs ?? sourceFromMs + scene.durationMs;
-  const sceneEvents = job.capture.events
-    .map(visualEvent)
-    .filter((candidate): candidate is VisualEvent => {
-      if (!candidate) return false;
-      return candidate.atMs >= sourceFromMs - 400 && candidate.atMs <= sourceToMs + 800;
-    })
-    .sort((left, right) => left.atMs - right.atMs);
   const plannedEvent = visualEvent(job.capture.events.find((candidate) => scene.focusEventIds.includes(candidate.id)));
-  const currentSourceMs = sourceFromMs + frame / fps * 1000;
-  const event = sceneEvents
-    .filter((candidate) => candidate.atMs <= currentSourceMs + 600)
-    .at(-1) ?? sceneEvents[0] ?? plannedEvent;
   const eventFrame = plannedEvent ? Math.max(0, Math.round((plannedEvent.atMs - sourceFromMs) / 1000 * fps)) : Math.round(duration * 0.42);
   const focus = spring({
     frame: frame - Math.max(0, eventFrame - Math.round(fps * 0.5)),
@@ -226,8 +144,6 @@ const Product: React.FC<{scene: Scene; job: RenderJob}> = ({scene, job}) => {
         pointerEvents: "none",
       }} />
       <SceneLabel scene={scene} job={job} />
-      {event ? <TargetHighlight event={event} viewport={job.capture.viewport} color={job.plan.brand.primary} /> : null}
-      {event ? <Cursor event={event} viewport={job.capture.viewport} sourceFromMs={sourceFromMs} color={job.plan.brand.primary} /> : null}
     </AbsoluteFill>
   );
 };
