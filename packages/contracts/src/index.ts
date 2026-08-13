@@ -11,6 +11,7 @@ export const productBriefSchema = z.object({
   customerProblem: z.string().min(12),
   audience: z.string().min(3),
   launchPromise: z.string().min(8),
+  directorTemplate: z.enum(["launch", "product-demo", "training", "support"]).default("launch"),
   journey: z.object({
     goal: z.string().min(12).max(240),
     startState: z.string().min(8).max(180),

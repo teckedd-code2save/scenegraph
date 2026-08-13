@@ -218,6 +218,220 @@ const shortSentence = (value: string, max = 70) => {
   return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1).trim()}…`;
 };
 
+type SceneRole = ScenePlan["scenes"][number]["role"];
+type DirectorCopyContext = {
+  brief: ProductBrief;
+  journey: string;
+  journeyBrief: NonNullable<ProductBrief["journey"]>;
+  firstBeat?: string;
+  secondBeat?: string;
+  thirdBeat?: string;
+  fourthBeat?: string;
+};
+type DirectorTemplate = {
+  previewMs: number;
+  scenes: Record<SceneRole, {
+    durationMs: number;
+    headline: (context: DirectorCopyContext) => string;
+    support: (context: DirectorCopyContext) => string | undefined;
+    rationale: string;
+  }>;
+};
+
+const directorTemplates = {
+  launch: {
+    previewMs: 45_000,
+    scenes: {
+      hook: {
+        durationMs: 5200,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.goal, 56),
+        support: ({brief}) => brief.productName,
+        rationale: "Introduce the declared launch promise using matching captured product state.",
+      },
+      problem: {
+        durationMs: 6200,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.startState, 56),
+        support: (_context) => "Start from the captured before state.",
+        rationale: "Use captured product evidence to establish the before state.",
+      },
+      action: {
+        durationMs: 7000,
+        headline: ({firstBeat}) => firstBeat ? titleCase(shortSentence(firstBeat, 52)) : "Show the product action",
+        support: (_context) => "The cut follows captured UI evidence.",
+        rationale: "Match the first requested journey beat to recorder evidence.",
+      },
+      outcome: {
+        durationMs: 7000,
+        headline: ({secondBeat}) => secondBeat ? titleCase(shortSentence(secondBeat, 52)) : "Show what changed",
+        support: (_context) => "The next beat stays attached to the screen.",
+        rationale: "Hold on the journey beat that explains what changed after the action.",
+      },
+      proof: {
+        durationMs: 7000,
+        headline: ({thirdBeat, journeyBrief}) => thirdBeat ? titleCase(shortSentence(thirdBeat, 52)) : shortSentence(journeyBrief.successState, 56),
+        support: (_context) => "Every claim is tied to captured UI evidence.",
+        rationale: "Prove the launch claim with a visible product state.",
+      },
+      fit: {
+        durationMs: 6000,
+        headline: ({fourthBeat, brief}) => fourthBeat ? titleCase(shortSentence(fourthBeat, 52)) : shortSentence(`Built for ${brief.audience}`, 56),
+        support: ({brief}) => shortSentence(brief.audience, 90),
+        rationale: "Connect the recorded workflow to the intended buyer and use case.",
+      },
+      close: {
+        durationMs: 6600,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.successState, 60),
+        support: ({brief}) => shortSentence(brief.launchPromise, 100),
+        rationale: "Close on the captured outcome and the product promise after the workflow has been shown.",
+      },
+    },
+  },
+  "product-demo": {
+    previewMs: 55_000,
+    scenes: {
+      hook: {
+        durationMs: 5200,
+        headline: ({brief}) => `${brief.productName} product demo`,
+        support: ({journeyBrief}) => shortSentence(journeyBrief.goal, 110),
+        rationale: "Frame the recording as a product walkthrough instead of a campaign spot.",
+      },
+      problem: {
+        durationMs: 7200,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.startState, 58),
+        support: (_context) => "Begin with the visible state the product is about to change.",
+        rationale: "Anchor the demo in the product context before showing controls.",
+      },
+      action: {
+        durationMs: 8200,
+        headline: ({firstBeat}) => firstBeat ? titleCase(shortSentence(firstBeat, 54)) : "Use the primary workflow",
+        support: (_context) => "Show the actual screen path.",
+        rationale: "Demonstrate the first concrete action from the captured journey.",
+      },
+      outcome: {
+        durationMs: 8200,
+        headline: ({secondBeat}) => secondBeat ? titleCase(shortSentence(secondBeat, 54)) : "Inspect the changed state",
+        support: (_context) => "Keep the viewer oriented inside the product.",
+        rationale: "Show the product response immediately after the action.",
+      },
+      proof: {
+        durationMs: 8200,
+        headline: ({thirdBeat}) => thirdBeat ? titleCase(shortSentence(thirdBeat, 54)) : "Verify the result",
+        support: (_context) => "The proof is visible in the captured UI.",
+        rationale: "Use evidence on screen to make the demo believable.",
+      },
+      fit: {
+        durationMs: 7600,
+        headline: ({brief}) => shortSentence(`Why ${brief.audience} use it`, 58),
+        support: ({brief}) => shortSentence(brief.customerProblem, 110),
+        rationale: "Tie the demonstrated workflow back to the user's job.",
+      },
+      close: {
+        durationMs: 7400,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.successState, 62),
+        support: ({brief}) => shortSentence(brief.launchPromise, 100),
+        rationale: "End the demo with the final product state and promise.",
+      },
+    },
+  },
+  training: {
+    previewMs: 60_000,
+    scenes: {
+      hook: {
+        durationMs: 5200,
+        headline: ({brief}) => `How to use ${brief.productName}`,
+        support: ({journeyBrief}) => shortSentence(journeyBrief.goal, 110),
+        rationale: "Set the video up as an instructional walkthrough.",
+      },
+      problem: {
+        durationMs: 7200,
+        headline: ({journeyBrief}) => shortSentence(`Before you start: ${journeyBrief.startState}`, 64),
+        support: (_context) => "Orient the learner before the first step.",
+        rationale: "Explain the starting condition the learner should recognize.",
+      },
+      action: {
+        durationMs: 9000,
+        headline: ({firstBeat}) => firstBeat ? `Step 1: ${shortSentence(firstBeat, 54)}` : "Step 1: Start the workflow",
+        support: (_context) => "Follow the captured product action.",
+        rationale: "Turn the first journey beat into a teachable step.",
+      },
+      outcome: {
+        durationMs: 9000,
+        headline: ({secondBeat}) => secondBeat ? `Step 2: ${shortSentence(secondBeat, 54)}` : "Step 2: Inspect the result",
+        support: (_context) => "Show what the learner should see next.",
+        rationale: "Teach the intermediate product state.",
+      },
+      proof: {
+        durationMs: 9000,
+        headline: ({thirdBeat}) => thirdBeat ? `Step 3: ${shortSentence(thirdBeat, 54)}` : "Step 3: Verify the result",
+        support: (_context) => "Use the captured UI as the checklist.",
+        rationale: "Make the final verification step explicit.",
+      },
+      fit: {
+        durationMs: 9600,
+        headline: ({fourthBeat}) => fourthBeat ? shortSentence(fourthBeat, 62) : "When to use this workflow",
+        support: ({brief}) => shortSentence(brief.audience, 100),
+        rationale: "Explain when the workflow applies.",
+      },
+      close: {
+        durationMs: 11_000,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.successState, 64),
+        support: (_context) => "The learner has reached the verified final state.",
+        rationale: "Close with the expected result instead of a marketing claim.",
+      },
+    },
+  },
+  support: {
+    previewMs: 50_000,
+    scenes: {
+      hook: {
+        durationMs: 4600,
+        headline: ({brief}) => shortSentence(`Resolve: ${brief.customerProblem}`, 64),
+        support: ({brief}) => brief.productName,
+        rationale: "Frame the cut as a support answer for a specific user problem.",
+      },
+      problem: {
+        durationMs: 7400,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.startState, 62),
+        support: (_context) => "Show the symptom before the fix.",
+        rationale: "Anchor the support answer in the visible problem state.",
+      },
+      action: {
+        durationMs: 8200,
+        headline: ({firstBeat}) => firstBeat ? titleCase(shortSentence(firstBeat, 54)) : "Apply the fix",
+        support: (_context) => "Use the captured product action.",
+        rationale: "Show the first concrete step toward resolution.",
+      },
+      outcome: {
+        durationMs: 8200,
+        headline: ({secondBeat}) => secondBeat ? titleCase(shortSentence(secondBeat, 54)) : "Check the response",
+        support: (_context) => "Confirm what changed on screen.",
+        rationale: "Show the product response after the support action.",
+      },
+      proof: {
+        durationMs: 8200,
+        headline: ({thirdBeat}) => thirdBeat ? titleCase(shortSentence(thirdBeat, 54)) : "Confirm the fix",
+        support: (_context) => "The answer is backed by visible evidence.",
+        rationale: "Verify that the issue has moved toward resolution.",
+      },
+      fit: {
+        durationMs: 6800,
+        headline: ({fourthBeat}) => fourthBeat ? titleCase(shortSentence(fourthBeat, 54)) : "Use this when the same symptom appears",
+        support: ({brief}) => shortSentence(brief.audience, 100),
+        rationale: "Explain who should reuse this answer.",
+      },
+      close: {
+        durationMs: 6600,
+        headline: ({journeyBrief}) => shortSentence(journeyBrief.successState, 64),
+        support: ({brief}) => shortSentence(brief.launchPromise, 100),
+        rationale: "End on the resolved state the user should expect.",
+      },
+    },
+  },
+} satisfies Record<string, DirectorTemplate>;
+
+const directorTemplateFor = (brief: ProductBrief) =>
+  directorTemplates[brief.directorTemplate ?? "launch"] ?? directorTemplates.launch;
+
 const scoreEvidenceText = (
   query: string,
   text: string,
@@ -330,6 +544,7 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const earlyClick = clicks.find((event) => event.atMs - firstEvidence.atMs < 25_000) ?? clicks[0] ?? interactions[1] ?? secondEvidence;
   const journey = journeyName(brief, capture);
   const journeyBrief = brief.journey ?? defaultJourney(brief);
+  const template = directorTemplateFor(brief);
   const used = new Set<string>();
   const choose = (query: string, fallback: EvidenceEvent) => {
     const match = evidenceFor(graph, query, fallback, used);
@@ -364,95 +579,93 @@ const direct = (projectId: string, brief: ProductBrief, capture: CaptureManifest
   const scenes = [
     {
       role: "hook" as const,
-      durationMs: 5200,
-      headline: journeyBrief ? shortSentence(journeyBrief.goal, 56) : `${brief.productName} live control`,
-      support: journeyBrief ? brief.productName : journey,
+      durationMs: template.scenes.hook.durationMs,
+      headline: template.scenes.hook.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.hook.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: startEvent.id,
       zoom: 1.08,
-      rationale: journeyBrief
-        ? "Introduce the declared demo goal using matching captured product state."
-        : "Introduce the live product from recorder-supplied UI state instead of a synthetic title card.",
+      rationale: template.scenes.hook.rationale,
       observation: startMatch
         ? `Graph evidence ${startMatch.grade}: ${startMatch.reason}.`
         : `The recorder captured the starting product state: ${eventLabel(startEvent)}.`,
     },
     {
       role: "problem" as const,
-      durationMs: 6200,
-      headline: journeyBrief ? shortSentence(journeyBrief.startState, 56) : "Spot the runtime state",
-      support: journeyBrief ? "Start from the captured before state." : "Start from the real product surface.",
+      durationMs: template.scenes.problem.durationMs,
+      headline: template.scenes.problem.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.problem.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: startEvent.id,
       zoom: 1.18,
-      rationale: "Use captured product evidence to establish the before state.",
+      rationale: template.scenes.problem.rationale,
       observation: startMatch
         ? `Before-state evidence ${startMatch.grade}: ${startMatch.reason}.`
         : `The before-state evidence is ${eventLabel(startEvent)}.`,
     },
     {
       role: "action" as const,
-      durationMs: 7000,
-      headline: firstBeat ? titleCase(shortSentence(firstBeat, 52)) : "Open the operational signal",
-      support: "The cut follows captured UI evidence.",
+      durationMs: template.scenes.action.durationMs,
+      headline: template.scenes.action.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.action.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: actionEvent.id,
       zoom: 1.34,
-      rationale: "Match the first requested journey beat to recorder evidence.",
+      rationale: template.scenes.action.rationale,
       observation: actionMatch
         ? `Action evidence ${actionMatch.grade}: ${actionMatch.reason}.`
         : `The action beat is anchored to ${eventLabel(actionEvent)}.`,
     },
     {
       role: "outcome" as const,
-      durationMs: 7000,
-      headline: secondBeat ? titleCase(shortSentence(secondBeat, 52)) : "Inspect the evidence",
-      support: journeyBrief ? "The next beat stays attached to the screen." : "Failure context stays attached to the screen.",
+      durationMs: template.scenes.outcome.durationMs,
+      headline: template.scenes.outcome.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.outcome.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: outcomeEvent.id,
       zoom: 1.28,
-      rationale: "Hold on the journey beat that explains what changed after the action.",
+      rationale: template.scenes.outcome.rationale,
       observation: outcomeMatch
         ? `Outcome evidence ${outcomeMatch.grade}: ${outcomeMatch.reason}.`
         : `The outcome beat appears at ${Math.round(outcomeEvent.atMs)}ms: ${eventLabel(outcomeEvent)}.`,
     },
     {
       role: "proof" as const,
-      durationMs: 7000,
-      headline: thirdBeat ? titleCase(shortSentence(thirdBeat, 52)) : journeyBrief ? shortSentence(journeyBrief.successState, 56) : "Action stays in context",
-      support: "Every claim is tied to captured UI evidence.",
+      durationMs: template.scenes.proof.durationMs,
+      headline: template.scenes.proof.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.proof.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: proofEvent.id,
       zoom: 1.18,
-      rationale: "Close the preview on explainable recorder evidence rather than a generic marketing claim.",
+      rationale: template.scenes.proof.rationale,
       observation: proofMatch
         ? `Proof evidence ${proofMatch.grade}: ${proofMatch.reason}.`
         : `The proof beat references ${eventLabel(proofEvent)}.`,
     },
     {
       role: "fit" as const,
-      durationMs: 6000,
-      headline: fourthBeat ? titleCase(shortSentence(fourthBeat, 52)) : shortSentence(`Built for ${brief.audience}`, 56),
-      support: shortSentence(brief.audience, 90),
+      durationMs: template.scenes.fit.durationMs,
+      headline: template.scenes.fit.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.fit.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: fitEvent.id,
       zoom: 1.16,
-      rationale: "Connect the recorded workflow to the intended buyer and use case.",
+      rationale: template.scenes.fit.rationale,
       observation: fitMatch
         ? `Fit evidence ${fitMatch.grade}: ${fitMatch.reason}.`
         : `The fit beat references ${eventLabel(fitEvent)}.`,
     },
     {
       role: "close" as const,
-      durationMs: 6600,
-      headline: shortSentence(journeyBrief.successState || brief.launchPromise, 60),
-      support: shortSentence(brief.launchPromise, 100),
+      durationMs: template.scenes.close.durationMs,
+      headline: template.scenes.close.headline({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
+      support: template.scenes.close.support({brief, journey, journeyBrief, firstBeat, secondBeat, thirdBeat, fourthBeat}),
       eventId: closeEvent.id,
       zoom: 1.1,
-      rationale: "Close on the captured outcome and the product promise after the workflow has been shown.",
+      rationale: template.scenes.close.rationale,
       observation: closeMatch
         ? `Close evidence ${closeMatch.grade}: ${closeMatch.reason}.`
         : `The close beat references ${eventLabel(closeEvent)}.`,
     },
   ];
-  const configuredPreviewMs = Number(process.env.SCENEGRAPH_PREVIEW_MS ?? 45_000);
+  const configuredPreviewMs = Number(process.env.SCENEGRAPH_PREVIEW_MS ?? template.previewMs);
   const previewMs = Number.isFinite(configuredPreviewMs) && configuredPreviewMs > 0
     ? configuredPreviewMs
-    : 45_000;
+    : template.previewMs;
   const baseDurationMs = scenes.reduce((total, scene) => total + scene.durationMs, 0);
   const evidenceDurationMs = Math.max(0, ...capture.events.map((event) => event.atMs));
   const capturedDurationMs = Math.max(capture.durationMs || 0, evidenceDurationMs);
@@ -730,6 +943,7 @@ app.get("/v1/projects", async () => {
         productName: project.brief.productName,
         productUrl: project.brief.productUrl,
         launchPromise: project.brief.launchPromise,
+        directorTemplate: project.brief.directorTemplate ?? "launch",
         captures: project.captures.length,
         renders: project.renderJobIds.length,
       };

@@ -1,5 +1,11 @@
 const api = globalThis.SCENEGRAPH_API ?? "http://localhost:4100";
 const roles = ["Hook", "Problem", "Product in action", "Outcome", "Proof", "Fit", "Close"];
+const directorTemplates = {
+  launch: "Launch film",
+  "product-demo": "Product demo",
+  training: "Training walkthrough",
+  support: "Support answer",
+};
 let project = null;
 let render = null;
 let poll = null;
@@ -38,7 +44,7 @@ const renderWorkspaceList = () => {
         <strong>${escape(item.productName)}</strong>
         <em>${escape(item.launchPromise)}</em>
       </span>
-      <small>${item.captures} capture${item.captures === 1 ? "" : "s"} · ${item.renders} render${item.renders === 1 ? "" : "s"}</small>
+      <small>${escape(directorTemplates[item.directorTemplate ?? "launch"] ?? "Launch film")} · ${item.captures} capture${item.captures === 1 ? "" : "s"} · ${item.renders} render${item.renders === 1 ? "" : "s"}</small>
     </button>
   `).join("") : `<div class="emptyState"><strong>No workspaces yet.</strong><span>Create one to start capturing product evidence.</span></div>`;
 };
@@ -86,6 +92,7 @@ const setJourneyForm = () => {
   form.elements.keyBeats.value = journey.keyBeats.join("\n");
   form.elements.successState.value = journey.successState;
   form.elements.avoid.value = journey.avoid ?? "";
+  form.elements.directorTemplate.value = project.brief.directorTemplate ?? "launch";
 };
 
 const ensureDirection = async () => {
@@ -342,6 +349,7 @@ $("#brief").addEventListener("submit", async (event) => {
       customerProblem: values.customerProblem,
       audience: values.audience,
       launchPromise: values.launchPromise,
+      directorTemplate: values.directorTemplate,
       journey,
       tone: "precise",
       brand: {primary: values.primary, surface: "#F5F5F1", ink: "#111411"},
@@ -425,7 +433,11 @@ $("#journey").addEventListener("submit", async (event) => {
   const response = await request(`/v1/projects/${project.id}/brief`, {
     method: "PUT",
     headers: {"content-type": "application/json"},
-    body: JSON.stringify({...project.brief, journey: journeyFromForm(event.currentTarget)}),
+    body: JSON.stringify({
+      ...project.brief,
+      directorTemplate: Object.fromEntries(new FormData(event.currentTarget)).directorTemplate,
+      journey: journeyFromForm(event.currentTarget),
+    }),
   }).catch(() => null);
   button.disabled = false; button.textContent = "Save direction";
   if (!response?.ok) {
