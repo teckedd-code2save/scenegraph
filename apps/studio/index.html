@@ -58,7 +58,6 @@
           <button id="newCapture" type="button">New capture →</button>
           <button id="generate" class="secondary">Generate preview</button>
           <button id="master" class="secondary" hidden>Render 1080p master</button>
-          <button id="openDirection" class="secondary" type="button">Direction</button>
         </div>
       </div>
 
@@ -79,11 +78,35 @@
           </div>
         </section>
 
-        <section class="panel planPanel">
-          <div class="panelHead"><strong>Directing plan</strong><span id="planState">Waiting for direction</span></div>
-          <div id="timeline" class="timeline"></div>
+        <section class="panel directorPanel">
+          <div class="panelHead">
+            <div><strong>Director</strong><span>Choose the edit style and story evidence.</span></div>
+            <button form="journey" type="submit">Save direction</button>
+          </div>
+          <form id="journey" class="directorForm">
+            <label>Director template<select name="directorTemplate">
+              <option value="launch">Launch film</option>
+              <option value="product-demo">Product demo</option>
+              <option value="training">Training walkthrough</option>
+              <option value="support">Support answer</option>
+            </select></label>
+            <div id="templateDeck" class="templateDeck" aria-label="Director templates"></div>
+            <label>Demo goal<textarea name="goal" required minlength="12"></textarea></label>
+            <label>Start state<textarea name="startState" required minlength="8"></textarea></label>
+            <label>Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
+            <label>Success state<textarea name="successState" required minlength="8"></textarea></label>
+            <label>Avoid<textarea name="avoid"></textarea></label>
+          </form>
         </section>
       </div>
+
+      <section class="panel planPanel">
+        <div class="panelHead">
+          <div><strong>Scene board</strong><span id="planState">Waiting for direction</span></div>
+          <span id="evidenceSummary" class="planMeta">No capture evidence yet</span>
+        </div>
+        <div id="timeline" class="timeline"></div>
+      </section>
 
       <section class="filmShell">
         <div id="stage" class="stage">
@@ -134,27 +157,6 @@
       <label class="wide">Avoid<textarea name="journeyAvoid" placeholder="Optional: weak scenes or claims the Director should not use."></textarea></label>
       <label>Signal colour<input name="primary" type="color" value="#1e9fe8"></label>
       <button>Create workspace →</button>
-    </form>
-  </dialog>
-
-  <dialog id="directionDialog">
-    <form id="journey" method="dialog" class="dialogForm">
-      <div class="dialogHead">
-        <div><p class="eyebrow">Direction</p><h2>What should this launch film prove?</h2></div>
-        <button id="closeDirection" class="iconButton" type="button" aria-label="Close">×</button>
-      </div>
-      <label class="wide">Demo goal<textarea name="goal" required minlength="12"></textarea></label>
-      <label>Director template<select name="directorTemplate">
-        <option value="launch">Launch film</option>
-        <option value="product-demo">Product demo</option>
-        <option value="training">Training walkthrough</option>
-        <option value="support">Support answer</option>
-      </select></label>
-      <label class="wide">Start state<textarea name="startState" required minlength="8"></textarea></label>
-      <label class="wide">Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
-      <label class="wide">Success state<textarea name="successState" required minlength="8"></textarea></label>
-      <label class="wide">Avoid<textarea name="avoid"></textarea></label>
-      <button>Save direction</button>
     </form>
   </dialog>
 

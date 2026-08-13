@@ -6,6 +6,28 @@ const directorTemplates = {
   training: "Training walkthrough",
   support: "Support answer",
 };
+const directorTemplateDetails = {
+  launch: {
+    title: "Launch film",
+    description: "A complete campaign cut: problem, product action, proof, and close.",
+    rhythm: "45s · story arc",
+  },
+  "product-demo": {
+    title: "Product demo",
+    description: "A walkthrough that keeps the viewer inside the real workflow.",
+    rhythm: "55s · guided demo",
+  },
+  training: {
+    title: "Training walkthrough",
+    description: "An instructional cut with explicit steps and verification moments.",
+    rhythm: "60s · teachable steps",
+  },
+  support: {
+    title: "Support answer",
+    description: "A problem-to-resolution video for one visible customer issue.",
+    rhythm: "50s · fix path",
+  },
+};
 let project = null;
 let render = null;
 let poll = null;
@@ -32,8 +54,36 @@ const syncAccessToken = () => {
 
 const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direction"}))) => {
   $("#timeline").innerHTML = scenes.map((scene, index) =>
-    `<article><small>${String(index + 1).padStart(2, "0")}</small><strong>${escape(scene.role)}</strong><span>${escape(scene.headline)}</span><em>${escape(scene.rationale ?? "No scene rationale yet.")}</em></article>`
+    `<article>
+      <small>${String(index + 1).padStart(2, "0")}</small>
+      <strong>${escape(scene.role)}</strong>
+      <span>${escape(scene.headline)}</span>
+      <em>${escape(scene.rationale ?? "No scene rationale yet.")}</em>
+      ${scene.evidence?.observation ? `<mark>${escape(scene.evidence.observation)}</mark>` : ""}
+    </article>`
   ).join("");
+};
+
+const renderTemplateDeck = (selected = "launch") => {
+  $("#templateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
+    <button class="templateCard ${value === selected ? "selected" : ""}" type="button" data-template="${escape(value)}">
+      <strong>${escape(template.title)}</strong>
+      <span>${escape(template.description)}</span>
+      <small>${escape(template.rhythm)}</small>
+    </button>
+  `).join("");
+};
+
+const summarizeCaptureEvidence = () => {
+  const capture = project?.captures?.at(-1);
+  if (!capture) {
+    $("#evidenceSummary").textContent = "No capture evidence yet";
+    return;
+  }
+  const snapshots = capture.events.filter((event) => event.kind === "snapshot").length;
+  const interactions = capture.events.filter((event) => ["click", "focus", "input"].includes(event.kind)).length;
+  const seconds = Math.max(1, Math.round(capture.durationMs / 1000));
+  $("#evidenceSummary").textContent = `${seconds}s capture · ${snapshots} states · ${interactions} interactions`;
 };
 
 const renderWorkspaceList = () => {
@@ -93,6 +143,7 @@ const setJourneyForm = () => {
   form.elements.successState.value = journey.successState;
   form.elements.avoid.value = journey.avoid ?? "";
   form.elements.directorTemplate.value = project.brief.directorTemplate ?? "launch";
+  renderTemplateDeck(form.elements.directorTemplate.value);
 };
 
 const ensureDirection = async () => {
@@ -268,6 +319,7 @@ const showProject = () => {
   setJourneyForm();
   timeline(project.plans.at(-1)?.scenes);
   $("#planState").textContent = project.plans.length ? "Latest plan ready" : "No generated plan yet";
+  summarizeCaptureEvidence();
   requestExtensionStatus();
   if (!ready) capturePoll = setInterval(checkCapture, 2500);
 };
@@ -386,8 +438,6 @@ $("#homeButton").addEventListener("click", showHome);
 $("#backToWorkspaces").addEventListener("click", showHome);
 $("#openCreate").addEventListener("click", () => $("#createDialog").showModal());
 $("#closeCreate").addEventListener("click", () => $("#createDialog").close());
-$("#openDirection").addEventListener("click", () => $("#directionDialog").showModal());
-$("#closeDirection").addEventListener("click", () => $("#directionDialog").close());
 $("#reloadWorkspaces").addEventListener("click", loadWorkspaces);
 $("#pairExtension").addEventListener("click", pairExtension);
 $("#openProduct").addEventListener("click", () => {
@@ -402,6 +452,18 @@ $("#workspaceList").addEventListener("click", async (event) => {
   if (!(event.target instanceof Element)) return;
   const item = event.target.closest("[data-project-id]");
   if (item) await loadProject(item.dataset.projectId);
+});
+
+$("#templateDeck").addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return;
+  const item = event.target.closest("[data-template]");
+  if (!item) return;
+  $("#journey").elements.directorTemplate.value = item.dataset.template;
+  renderTemplateDeck(item.dataset.template);
+});
+
+$("#journey").elements.directorTemplate.addEventListener("change", (event) => {
+  renderTemplateDeck(event.target.value);
 });
 
 window.addEventListener("message", (event) => {
@@ -428,7 +490,7 @@ window.addEventListener("message", (event) => {
 
 $("#journey").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = submitButton(event.currentTarget);
+  const button = document.querySelector('button[form="journey"]') ?? submitButton(event.currentTarget);
   button.disabled = true; button.textContent = "Saving...";
   const response = await request(`/v1/projects/${project.id}/brief`, {
     method: "PUT",
@@ -446,7 +508,6 @@ $("#journey").addEventListener("submit", async (event) => {
   }
   project = await response.json();
   showProject();
-  $("#directionDialog").close();
   $("#notice").textContent = "Direction saved. The next preview will follow this journey.";
 });
 
