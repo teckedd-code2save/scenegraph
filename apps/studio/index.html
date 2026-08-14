@@ -148,28 +148,21 @@
   </main>
 
   <dialog id="createDialog">
-    <form id="brief" method="dialog" class="dialogForm">
+    <form id="brief" method="dialog" class="dialogForm simpleBrief">
       <div class="dialogHead">
-        <div><p class="eyebrow">New workspace</p><h2>Define the product journey</h2></div>
+        <div><p class="eyebrow">New workspace</p><h2>Describe what we are filming</h2></div>
         <button id="closeCreate" class="iconButton" type="button" aria-label="Close">×</button>
       </div>
-      <label>Product<input name="productName" required placeholder="Lepta QA"></label>
-      <label>Product URL<input name="productUrl" type="url" required placeholder="https://product.example"></label>
-      <label class="wide">Customer problem<input name="customerProblem" required minlength="12" placeholder="What painful job does this product remove?"></label>
-      <label>Audience<input name="audience" required placeholder="Product engineering teams"></label>
-      <label>Launch promise<input name="launchPromise" required placeholder="Ship confidence, not guesswork."></label>
       <label>Director template<select name="directorTemplate">
         <option value="launch">Launch film</option>
         <option value="product-demo">Product demo</option>
         <option value="training">Training walkthrough</option>
         <option value="support">Support answer</option>
       </select></label>
-      <label class="wide">Demo goal<textarea name="journeyGoal" required minlength="12" placeholder="Show how the product turns a bad state into a verified outcome."></textarea></label>
-      <label class="wide">Start state<textarea name="journeyStartState" required minlength="8" placeholder="What is visibly wrong, risky, slow, or incomplete at the start?"></textarea></label>
-      <label class="wide">Key beats<textarea name="journeyKeyBeats" required minlength="8" placeholder="One per line: open the current state&#10;perform the decisive action&#10;inspect the changed result&#10;show the proof screen"></textarea></label>
-      <label class="wide">Success state<textarea name="journeySuccessState" required minlength="8" placeholder="What final state proves the product worked?"></textarea></label>
-      <label class="wide">Avoid<textarea name="journeyAvoid" placeholder="Optional: weak scenes or claims the Director should not use."></textarea></label>
-      <label>Signal colour<input name="primary" type="color" value="#1e9fe8"></label>
+      <label>Product URL<input name="productUrl" type="url" required placeholder="https://your-product.example"></label>
+      <label>Product name<input name="productName" placeholder="Optional"></label>
+      <label class="wide">Brief<textarea name="description" required minlength="24" placeholder="Tell SceneGraph what this product does, who it is for, and what outcome the demo should make obvious."></textarea></label>
+      <p class="formHint wide">The specific demo story will be shaped after capture, from the screens and actions SceneGraph can actually see.</p>
       <button>Create workspace →</button>
     </form>
   </dialog>

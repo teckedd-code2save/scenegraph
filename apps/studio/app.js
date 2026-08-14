@@ -144,6 +144,43 @@ const defaultJourney = (brief) => ({
   avoid: "Do not use generic scenes unless they match captured product evidence.",
 });
 
+const sentence = (value, fallback) => {
+  const normalized = String(value ?? "").trim().replace(/\s+/g, " ");
+  if (!normalized) return fallback;
+  return normalized.match(/[^.!?]+[.!?]?/)?.[0]?.trim() || fallback;
+};
+
+const productNameFromUrl = (productUrl) => {
+  try {
+    const host = new URL(productUrl).hostname.replace(/^www\./, "");
+    const label = host.split(".")[0] || "Product";
+    return label.split(/[-_]/).filter(Boolean).map((part) => part[0].toUpperCase() + part.slice(1)).join(" ");
+  } catch {
+    return "Product";
+  }
+};
+
+const audienceFromDescription = (description) => {
+  const match = String(description).match(/\bfor\s+([^,.]+(?:teams|founders|operators|users|companies|customers|developers|engineers|admins|creators)?)/i);
+  return match?.[1]?.trim() || "Product teams";
+};
+
+const briefFromSimpleForm = (values) => {
+  const description = String(values.description).trim();
+  const productName = String(values.productName).trim() || productNameFromUrl(values.productUrl);
+  const firstSentence = sentence(description, `${productName} turns product work into a visible outcome.`);
+  return {
+    productName,
+    productUrl: values.productUrl,
+    customerProblem: description.length >= 12 ? description : `${productName} needs a clear product story.`,
+    audience: audienceFromDescription(description),
+    launchPromise: firstSentence.length >= 8 ? firstSentence.slice(0, 160) : `${productName} makes the product outcome visible.`,
+    directorTemplate: values.directorTemplate,
+    tone: "precise",
+    brand: {primary: "#0f8fdb", surface: "#F6F7F4", ink: "#151815"},
+  };
+};
+
 const journeyFromForm = (form) => {
   const values = Object.fromEntries(new FormData(form));
   return {
@@ -407,26 +444,9 @@ $("#brief").addEventListener("submit", async (event) => {
   const button = submitButton(event.currentTarget);
   button.disabled = true; button.textContent = "Creating...";
   const values = Object.fromEntries(new FormData(event.currentTarget));
-  const journey = {
-    goal: values.journeyGoal,
-    startState: values.journeyStartState,
-    keyBeats: String(values.journeyKeyBeats).split(/\n+/).map((beat) => beat.trim()).filter(Boolean),
-    successState: values.journeySuccessState,
-    avoid: values.journeyAvoid || undefined,
-  };
   const response = await request("/v1/projects", {
     method: "POST", headers: {"content-type": "application/json"},
-    body: JSON.stringify({
-      productName: values.productName,
-      productUrl: values.productUrl,
-      customerProblem: values.customerProblem,
-      audience: values.audience,
-      launchPromise: values.launchPromise,
-      directorTemplate: values.directorTemplate,
-      journey,
-      tone: "precise",
-      brand: {primary: values.primary, surface: "#F5F5F1", ink: "#111411"},
-    }),
+    body: JSON.stringify(briefFromSimpleForm(values)),
   }).catch(() => null);
   button.disabled = false; button.textContent = "Create product workspace →";
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
