@@ -79,18 +79,19 @@ const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direc
 const renderTemplateDeck = (selected = "launch") => {
   $("#templateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
     <button class="templateCard ${value === selected ? "selected" : ""}" type="button" data-template="${escape(value)}">
-      <span class="templatePreview">
-        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}">${escape(scene)}</i>`).join("")}
-      </span>
       <span class="templateCopy">
         <strong>${escape(template.title)}</strong>
         <em>${escape(template.description)}</em>
       </span>
+      <span class="templatePreview" aria-hidden="true">
+        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}"></i>`).join("")}
+      </span>
+      <span class="templateSequence">${template.scenes.map((scene) => `<i>${escape(scene)}</i>`).join("")}</span>
       <span class="templateMeta">
         <small>${escape(template.rhythm)}</small>
         <small>${escape(template.treatment)}</small>
       </span>
-      <span class="templateVisual">${escape(template.visual)}</span>
+      <span class="templateUse">${escape(templateReason(value))}</span>
     </button>
   `).join("");
 };
@@ -113,19 +114,19 @@ const recommendedTemplateFor = (description) => {
 const renderCreateTemplateDeck = (selected = "launch", recommended = selected) => {
   $("#createTemplateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
     <button class="templateCard ${value === selected ? "selected" : ""} ${value === recommended ? "recommended" : ""}" type="button" data-template="${escape(value)}">
-      <span class="templatePreview">
-        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}">${escape(scene)}</i>`).join("")}
-      </span>
       <span class="templateCopy">
         <strong>${escape(template.title)}</strong>
         <em>${escape(template.description)}</em>
       </span>
+      <span class="templatePreview" aria-hidden="true">
+        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}"></i>`).join("")}
+      </span>
+      <span class="templateSequence">${template.scenes.map((scene) => `<i>${escape(scene)}</i>`).join("")}</span>
       <span class="templateMeta">
         <small>${escape(template.rhythm)}</small>
         <small>${escape(template.treatment)}</small>
         ${value === recommended ? "<small>Recommended</small>" : ""}
       </span>
-      <span class="templateVisual">${escape(template.visual)}</span>
       <span class="templateUse">${escape(templateReason(value))}</span>
     </button>
   `).join("");
