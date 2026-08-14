@@ -501,7 +501,7 @@ $("#journey").addEventListener("submit", async (event) => {
       journey: journeyFromForm(event.currentTarget),
     }),
   }).catch(() => null);
-  button.disabled = false; button.textContent = "Save direction";
+  button.disabled = false; button.textContent = "Save";
   if (!response?.ok) {
     $("#notice").textContent = "Direction could not be saved.";
     return;

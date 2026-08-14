@@ -51,7 +51,6 @@
       <div class="workspaceHead">
         <div>
           <button id="backToWorkspaces" class="linkButton" type="button">← Workspaces</button>
-          <p class="eyebrow">Launch workspace</p>
           <h1 id="promise"></h1>
         </div>
         <div class="actions">
@@ -61,66 +60,71 @@
         </div>
       </div>
 
-      <div class="workspaceGrid">
-        <section class="panel capturePanel">
-          <div class="panelHead">
-            <div>
-              <span id="captureStatus" class="status">Awaiting capture</span>
-              <strong>Browser capture</strong>
-            </div>
-            <code id="projectId"></code>
+      <div class="workbench">
+        <section class="filmShell">
+          <div id="stage" class="stage">
+            <div class="stageMark">SG</div>
+            <p id="stageMessage">Your clean product film will appear here.</p>
+            <div id="progress" class="progress" hidden><i></i></div>
+            <p id="renderError" class="error"></p>
           </div>
-          <p id="captureCopy">Connect the extension to this workspace, open the product tab, then let SceneGraph collect journey evidence.</p>
-          <p id="extensionStatus" class="muted">Pair the extension so it knows this workspace, the Studio API, and the product URL.</p>
-          <div class="captureActions">
-            <button id="pairExtension" class="secondary" type="button">Connect extension</button>
-            <button id="openProduct" class="secondary" type="button">Open product tab</button>
+          <div id="player" class="player" hidden>
+            <video id="renderVideo" controls></video>
+            <span id="quality" class="quality"></span>
+            <a id="downloadRender" class="download" download hidden>Download MP4 ↓</a>
           </div>
         </section>
 
-        <section class="panel directorPanel">
-          <div class="panelHead">
-            <div><strong>Director</strong><span>Choose the edit style and story evidence.</span></div>
-            <button form="journey" type="submit">Save direction</button>
-          </div>
-          <form id="journey" class="directorForm">
-            <label>Director template<select name="directorTemplate">
-              <option value="launch">Launch film</option>
-              <option value="product-demo">Product demo</option>
-              <option value="training">Training walkthrough</option>
-              <option value="support">Support answer</option>
-            </select></label>
-            <div id="templateDeck" class="templateDeck" aria-label="Director templates"></div>
-            <label>Demo goal<textarea name="goal" required minlength="12"></textarea></label>
-            <label>Start state<textarea name="startState" required minlength="8"></textarea></label>
-            <label>Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
-            <label>Success state<textarea name="successState" required minlength="8"></textarea></label>
-            <label>Avoid<textarea name="avoid"></textarea></label>
-          </form>
-        </section>
+        <aside class="sideRail">
+          <section class="panel capturePanel">
+            <div class="panelHead">
+              <div>
+                <span id="captureStatus" class="status">Awaiting capture</span>
+                <strong>Capture</strong>
+              </div>
+            </div>
+            <p id="captureCopy">Connect the extension, open the product tab, then capture product evidence.</p>
+            <p id="extensionStatus" class="muted">Pair the extension so it knows this workspace.</p>
+            <code id="projectId"></code>
+            <div class="captureActions">
+              <button id="pairExtension" class="secondary" type="button">Connect</button>
+              <button id="openProduct" class="secondary" type="button">Open product</button>
+            </div>
+          </section>
+
+          <section class="panel directorPanel">
+            <div class="panelHead">
+              <div><strong>Director</strong><span>Template and story controls.</span></div>
+              <button form="journey" type="submit">Save</button>
+            </div>
+            <form id="journey" class="directorForm">
+              <label>Director template<select name="directorTemplate">
+                <option value="launch">Launch film</option>
+                <option value="product-demo">Product demo</option>
+                <option value="training">Training walkthrough</option>
+                <option value="support">Support answer</option>
+              </select></label>
+              <div id="templateDeck" class="templateDeck" aria-label="Director templates"></div>
+              <details class="directionDetails">
+                <summary>Story direction</summary>
+                <label>Demo goal<textarea name="goal" required minlength="12"></textarea></label>
+                <label>Start state<textarea name="startState" required minlength="8"></textarea></label>
+                <label>Key beats<textarea name="keyBeats" required minlength="8"></textarea></label>
+                <label>Success state<textarea name="successState" required minlength="8"></textarea></label>
+                <label>Avoid<textarea name="avoid"></textarea></label>
+              </details>
+            </form>
+          </section>
+        </aside>
       </div>
 
-      <section class="panel planPanel">
-        <div class="panelHead">
-          <div><strong>Scene board</strong><span id="planState">Waiting for direction</span></div>
+      <details class="panel sceneDrawer" open>
+        <summary>
+          <span><strong>Scene board</strong><em id="planState">Waiting for direction</em></span>
           <span id="evidenceSummary" class="planMeta">No capture evidence yet</span>
-        </div>
+        </summary>
         <div id="timeline" class="timeline"></div>
-      </section>
-
-      <section class="filmShell">
-        <div id="stage" class="stage">
-          <div class="stageMark">SG</div>
-          <p id="stageMessage">Your clean product film will appear here.</p>
-          <div id="progress" class="progress" hidden><i></i></div>
-          <p id="renderError" class="error"></p>
-        </div>
-        <div id="player" class="player" hidden>
-          <video id="renderVideo" controls></video>
-          <span id="quality" class="quality"></span>
-          <a id="downloadRender" class="download" download hidden>Download MP4 ↓</a>
-        </div>
-      </section>
+      </details>
 
       <section id="guidance" class="guidance" hidden>
         <div>
