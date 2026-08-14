@@ -77,23 +77,31 @@ const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direc
 };
 
 const renderTemplateDeck = (selected = "launch") => {
-  $("#templateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
-    <button class="templateCard ${value === selected ? "selected" : ""}" type="button" data-template="${escape(value)}">
-      <span class="templateCopy">
-        <strong>${escape(template.title)}</strong>
-        <em>${escape(template.description)}</em>
-      </span>
-      <span class="templatePreview" aria-hidden="true">
-        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}"></i>`).join("")}
-      </span>
-      <span class="templateSequence">${template.scenes.map((scene) => `<i>${escape(scene)}</i>`).join("")}</span>
-      <span class="templateMeta">
-        <small>${escape(template.rhythm)}</small>
-        <small>${escape(template.treatment)}</small>
-      </span>
-      <span class="templateUse">${escape(templateReason(value))}</span>
-    </button>
-  `).join("");
+  const active = directorTemplateDetails[selected] ?? directorTemplateDetails.launch;
+  $("#templateDeck").innerHTML = `
+    <div class="templatePicker">
+      <div class="templateOptions">
+        ${Object.entries(directorTemplateDetails).map(([value, template]) => `
+          <button class="templateOption ${value === selected ? "selected" : ""}" type="button" data-template="${escape(value)}">
+            <span>${escape(template.title)}</span>
+            <small>${escape(template.rhythm)}</small>
+          </button>
+        `).join("")}
+      </div>
+      <article class="templateDetail">
+        <div class="templateDetailHead">
+          <strong>${escape(active.title)}</strong>
+          <span>${escape(active.treatment)}</span>
+        </div>
+        <div class="templatePreview" aria-hidden="true">
+          ${active.scenes.map((scene, index) => `<i style="--step:${index + 1}"></i>`).join("")}
+        </div>
+        <div class="templateSequence">${active.scenes.map((scene) => `<i>${escape(scene)}</i>`).join("")}</div>
+        <p>${escape(active.description)}</p>
+        <em>${escape(templateReason(selected))}</em>
+      </article>
+    </div>
+  `;
 };
 
 const templateReason = (value) => ({
