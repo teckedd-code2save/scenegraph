@@ -9,23 +9,35 @@ const directorTemplates = {
 const directorTemplateDetails = {
   launch: {
     title: "Launch film",
-    description: "A complete campaign cut: problem, product action, proof, and close.",
-    rhythm: "45s · story arc",
+    description: "A campaign cut that sells the change without hiding the product.",
+    rhythm: "45s",
+    treatment: "Fast proof arc",
+    scenes: ["Hook", "Problem", "Action", "Proof", "Close"],
+    visual: "Product-led, restrained captions, confident pacing.",
   },
   "product-demo": {
     title: "Product demo",
-    description: "A walkthrough that keeps the viewer inside the real workflow.",
-    rhythm: "55s · guided demo",
+    description: "A walkthrough that stays inside the real workflow.",
+    rhythm: "55s",
+    treatment: "Guided workflow",
+    scenes: ["Context", "Step", "Result", "Verify", "Recap"],
+    visual: "Clear zooms, cursor path, feature-by-feature continuity.",
   },
   training: {
     title: "Training walkthrough",
-    description: "An instructional cut with explicit steps and verification moments.",
-    rhythm: "60s · teachable steps",
+    description: "An instructional cut for learning the exact process.",
+    rhythm: "60s",
+    treatment: "Teachable steps",
+    scenes: ["Setup", "Step 1", "Step 2", "Check", "Done"],
+    visual: "Slower holds, explicit step labels, verification emphasis.",
   },
   support: {
     title: "Support answer",
-    description: "A problem-to-resolution video for one visible customer issue.",
-    rhythm: "50s · fix path",
+    description: "A problem-to-resolution answer for a visible issue.",
+    rhythm: "50s",
+    treatment: "Fix path",
+    scenes: ["Symptom", "Cause", "Fix", "Confirm", "Share"],
+    visual: "Diagnostic framing, fewer flourishes, outcome first.",
   },
 };
 let project = null;
@@ -67,9 +79,18 @@ const timeline = (scenes = roles.map((role) => ({role, headline: "Awaiting direc
 const renderTemplateDeck = (selected = "launch") => {
   $("#templateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
     <button class="templateCard ${value === selected ? "selected" : ""}" type="button" data-template="${escape(value)}">
-      <strong>${escape(template.title)}</strong>
-      <span>${escape(template.description)}</span>
-      <small>${escape(template.rhythm)}</small>
+      <span class="templatePreview">
+        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}">${escape(scene)}</i>`).join("")}
+      </span>
+      <span class="templateCopy">
+        <strong>${escape(template.title)}</strong>
+        <em>${escape(template.description)}</em>
+      </span>
+      <span class="templateMeta">
+        <small>${escape(template.rhythm)}</small>
+        <small>${escape(template.treatment)}</small>
+      </span>
+      <span class="templateVisual">${escape(template.visual)}</span>
     </button>
   `).join("");
 };
@@ -484,7 +505,7 @@ window.addEventListener("message", (event) => {
     return;
   }
   if (event.data.projectId) {
-    $("#extensionStatus").textContent = "Extension is paired to another workspace. Choose Connect extension to switch it here.";
+    $("#extensionStatus").textContent = "Extension is paired elsewhere. Connect to switch it here.";
   }
 });
 

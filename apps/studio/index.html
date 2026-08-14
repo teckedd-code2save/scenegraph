@@ -23,6 +23,14 @@
           <h1>Make launch films from real product journeys.</h1>
           <p class="lede">Pick a workspace, capture a fresh pass, then let SceneGraph direct the preview from captured UI evidence.</p>
         </div>
+        <div class="homeShowcase" aria-hidden="true">
+          <span>Capture</span>
+          <strong>SceneGraph Director</strong>
+          <div>
+            <i></i><i></i><i></i><i></i>
+          </div>
+          <em>Evidence first · template directed · product visible</em>
+        </div>
         <div class="homeActions">
           <button id="openCreate" type="button">New workspace →</button>
           <button id="reloadWorkspaces" class="secondary" type="button">Reload list</button>
@@ -85,7 +93,10 @@
             </div>
             <p id="captureCopy">Connect the extension, open the product tab, then capture product evidence.</p>
             <p id="extensionStatus" class="muted">Pair the extension so it knows this workspace.</p>
-            <code id="projectId"></code>
+            <details class="projectIdDetails">
+              <summary>Recorder project ID</summary>
+              <code id="projectId"></code>
+            </details>
             <div class="captureActions">
               <button id="pairExtension" class="secondary" type="button">Connect</button>
               <button id="openProduct" class="secondary" type="button">Open product</button>
