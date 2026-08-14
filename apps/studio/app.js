@@ -95,6 +95,50 @@ const renderTemplateDeck = (selected = "launch") => {
   `).join("");
 };
 
+const templateReason = (value) => ({
+  launch: "Best when the goal is a launch or sales-ready product film.",
+  "product-demo": "Best when the brief is about showing a real workflow end to end.",
+  training: "Best when the viewer should learn repeatable steps.",
+  support: "Best when the video starts from a problem, incident, or fix.",
+})[value] ?? "A good default for the product story.";
+
+const recommendedTemplateFor = (description) => {
+  const text = String(description).toLowerCase();
+  if (/\b(fix|issue|bug|error|failed|failure|support|resolve|incident|troubleshoot)\b/.test(text)) return "support";
+  if (/\b(train|training|learn|tutorial|how to|onboard|guide|step)\b/.test(text)) return "training";
+  if (/\b(demo|walkthrough|workflow|feature|show how|product tour)\b/.test(text)) return "product-demo";
+  return "launch";
+};
+
+const renderCreateTemplateDeck = (selected = "launch", recommended = selected) => {
+  $("#createTemplateDeck").innerHTML = Object.entries(directorTemplateDetails).map(([value, template]) => `
+    <button class="templateCard ${value === selected ? "selected" : ""} ${value === recommended ? "recommended" : ""}" type="button" data-template="${escape(value)}">
+      <span class="templatePreview">
+        ${template.scenes.map((scene, index) => `<i style="--step:${index + 1}">${escape(scene)}</i>`).join("")}
+      </span>
+      <span class="templateCopy">
+        <strong>${escape(template.title)}</strong>
+        <em>${escape(template.description)}</em>
+      </span>
+      <span class="templateMeta">
+        <small>${escape(template.rhythm)}</small>
+        <small>${escape(template.treatment)}</small>
+        ${value === recommended ? "<small>Recommended</small>" : ""}
+      </span>
+      <span class="templateVisual">${escape(template.visual)}</span>
+      <span class="templateUse">${escape(templateReason(value))}</span>
+    </button>
+  `).join("");
+};
+
+const setCreateStep = (step) => {
+  const choosingTemplate = step === "template";
+  $("#briefStep").hidden = choosingTemplate;
+  $("#templateStep").hidden = !choosingTemplate;
+  $("#createSubmit").textContent = choosingTemplate ? "Create workspace →" : "Review templates →";
+  $("#createDialog").dataset.step = step;
+};
+
 const summarizeCaptureEvidence = () => {
   const capture = project?.captures?.at(-1);
   if (!capture) {
@@ -442,13 +486,21 @@ $("#brief").addEventListener("submit", async (event) => {
   event.preventDefault();
   syncAccessToken();
   const button = submitButton(event.currentTarget);
-  button.disabled = true; button.textContent = "Creating...";
   const values = Object.fromEntries(new FormData(event.currentTarget));
+  if ($("#createDialog").dataset.step !== "template") {
+    const recommended = recommendedTemplateFor(values.description);
+    event.currentTarget.elements.directorTemplate.value = recommended;
+    $("#templateRecommendation").textContent = `${directorTemplateDetails[recommended].title} is recommended. ${templateReason(recommended)}`;
+    renderCreateTemplateDeck(recommended, recommended);
+    setCreateStep("template");
+    return;
+  }
+  button.disabled = true; button.textContent = "Creating...";
   const response = await request("/v1/projects", {
     method: "POST", headers: {"content-type": "application/json"},
     body: JSON.stringify(briefFromSimpleForm(values)),
   }).catch(() => null);
-  button.disabled = false; button.textContent = "Create product workspace →";
+  button.disabled = false; button.textContent = "Create workspace →";
   if (!response?.ok) return $("#createNotice").textContent = "The workspace could not be created. Check the brief and API.";
   project = await response.json();
   $("#createDialog").close();
@@ -477,8 +529,13 @@ async function checkCapture() {
 
 $("#homeButton").addEventListener("click", showHome);
 $("#backToWorkspaces").addEventListener("click", showHome);
-$("#openCreate").addEventListener("click", () => $("#createDialog").showModal());
+$("#openCreate").addEventListener("click", () => {
+  setCreateStep("brief");
+  $("#brief").reset();
+  $("#createDialog").showModal();
+});
 $("#closeCreate").addEventListener("click", () => $("#createDialog").close());
+$("#backToBrief").addEventListener("click", () => setCreateStep("brief"));
 $("#pairExtension").addEventListener("click", pairExtension);
 $("#openProduct").addEventListener("click", () => {
   if (!project?.brief.productUrl) return;
@@ -500,6 +557,14 @@ $("#templateDeck").addEventListener("click", (event) => {
   if (!item) return;
   $("#journey").elements.directorTemplate.value = item.dataset.template;
   renderTemplateDeck(item.dataset.template);
+});
+
+$("#createTemplateDeck").addEventListener("click", (event) => {
+  if (!(event.target instanceof Element)) return;
+  const item = event.target.closest("[data-template]");
+  if (!item) return;
+  $("#brief").elements.directorTemplate.value = item.dataset.template;
+  renderCreateTemplateDeck(item.dataset.template, recommendedTemplateFor($("#brief").elements.description.value));
 });
 
 $("#journey").elements.directorTemplate.addEventListener("change", (event) => {

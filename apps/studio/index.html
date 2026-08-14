@@ -153,17 +153,24 @@
         <div><p class="eyebrow">New workspace</p><h2>Describe what we are filming</h2></div>
         <button id="closeCreate" class="iconButton" type="button" aria-label="Close">×</button>
       </div>
-      <label>Director template<select name="directorTemplate">
-        <option value="launch">Launch film</option>
-        <option value="product-demo">Product demo</option>
-        <option value="training">Training walkthrough</option>
-        <option value="support">Support answer</option>
-      </select></label>
-      <label>Product URL<input name="productUrl" type="url" required placeholder="https://your-product.example"></label>
-      <label>Product name<input name="productName" placeholder="Optional"></label>
-      <label class="wide">Brief<textarea name="description" required minlength="24" placeholder="Tell SceneGraph what this product does, who it is for, and what outcome the demo should make obvious."></textarea></label>
-      <p class="formHint wide">The specific demo story will be shaped after capture, from the screens and actions SceneGraph can actually see.</p>
-      <button>Create workspace →</button>
+      <section id="briefStep" class="briefStep wide">
+        <label>Product URL<input name="productUrl" type="url" required placeholder="https://your-product.example"></label>
+        <label>Product name<input name="productName" placeholder="Optional"></label>
+        <label>Brief<textarea name="description" required minlength="24" placeholder="Tell SceneGraph what this product does, who it is for, and what outcome the demo should make obvious."></textarea></label>
+        <p class="formHint">The specific demo story will be shaped after capture, from the screens and actions SceneGraph can actually see.</p>
+      </section>
+      <section id="templateStep" class="templateStep wide" hidden>
+        <div class="templateStepHead">
+          <div>
+            <strong>Choose the kind of video</strong>
+            <span id="templateRecommendation">SceneGraph will recommend a starting point from your brief.</span>
+          </div>
+          <button id="backToBrief" class="secondary" type="button">Back</button>
+        </div>
+        <input name="directorTemplate" type="hidden" value="launch">
+        <div id="createTemplateDeck" class="templateDeck createTemplateDeck" aria-label="Director templates"></div>
+      </section>
+      <button id="createSubmit">Review templates →</button>
     </form>
   </dialog>
 
