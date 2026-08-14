@@ -459,7 +459,6 @@ $("#homeButton").addEventListener("click", showHome);
 $("#backToWorkspaces").addEventListener("click", showHome);
 $("#openCreate").addEventListener("click", () => $("#createDialog").showModal());
 $("#closeCreate").addEventListener("click", () => $("#createDialog").close());
-$("#reloadWorkspaces").addEventListener("click", loadWorkspaces);
 $("#pairExtension").addEventListener("click", pairExtension);
 $("#openProduct").addEventListener("click", () => {
   if (!project?.brief.productUrl) return;
